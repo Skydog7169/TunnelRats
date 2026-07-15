@@ -542,6 +542,21 @@ export class Player {
           bite(c, r + stagger);
         }
       }
+      // Climbing (r9.3): the RISE happens where the digger STANDS, and his
+      // 2.4-wide body still overlaps up to two trailing columns cut at the
+      // older, lower stair level — their ceilings catch his head at certain
+      // alignments and trap the ascent (descent never needs this: you fall
+      // into space cut ahead). So an up-stair blow also chips the rise
+      // clearance above his own head and one column behind — CEILING rows
+      // only, strictly above the passage top; the own-column floor guard is
+      // untouched.
+      if (this.rampDir === -1) {
+        for (const c of [ownCol, ownCol - stepX]) {
+          for (let r = passTop - headroom - 1; r <= passTop - 1; r++) {
+            bite(c, r);
+          }
+        }
+      }
       // Ghost telegraph: where the NEXT two stair steps will carve if the
       // digger keeps this aim. Render hint only — recomputed every tick,
       // never hashed, light-gated by the renderer like the live window.
