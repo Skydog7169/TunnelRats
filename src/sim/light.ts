@@ -59,7 +59,7 @@ export class DynamicLight {
         let v = s.intensity * (1 - dr * dr);
 
         // Cone mask
-        if (s.coneCos !== undefined && dist > 0.75) {
+        if (s.coneCos !== undefined && dist > 1.5) {
           const d = (dx / dist) * (s.dirX ?? 1) + (dy / dist) * (s.dirY ?? 0);
           const soft = s.coneSoftCos ?? s.coneCos;
           if (d < soft) continue;
@@ -69,7 +69,10 @@ export class DynamicLight {
 
         // Occlusion: sample the segment, charging each solid tile crossed once.
         // The target tile itself is not charged, so wall faces light up.
-        const steps = Math.max(1, Math.ceil(dist / 0.33));
+        // Step from config (r9: 0.66 tiles = the same PHYSICAL sampling
+        // density as 0.33 at 8px — per-tile transmit is sqrt'd, so an
+        // occasionally skipped thin tile costs half the old shadow error).
+        const steps = Math.max(1, Math.ceil(dist / CONFIG.light.rayStepTiles));
         let lastTile = -1;
         for (let k = 1; k < steps; k++) {
           const t = k / steps;

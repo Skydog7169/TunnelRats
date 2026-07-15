@@ -498,7 +498,7 @@ export class Player {
       // lived implicitly in r7's slope×colDist product; keep it explicit).
       const colDist = Math.abs(ax - Math.floor(cx));
       const shift = colDist >= 1 ? this.rampDir : 0;
-      const headroom = shift !== 0 ? 1 : 0;
+      const headroom = shift !== 0 ? 2 : 0; // 2 tiles at 4px = the r8 spare (wedge guard)
       // Bite the window at EVERY column from just ahead of the digger to the
       // anchor, not the anchor alone: a slow tile (root mat, clay) can outlive
       // its window, and once the digger steps down/up past it the leftover

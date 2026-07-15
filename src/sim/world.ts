@@ -100,7 +100,7 @@ export class World {
   /** Process pending sunlight dirt. Called once per tick; no-op when clean. */
   updateSunlight(): void {
     if (this.dirtySunMin === Number.POSITIVE_INFINITY) return;
-    const spread = 20; // horizontal bleed reach; recompute a padded band
+    const spread = 40; // horizontal bleed reach in tiles (≥ sunRelaxPasses)
     const x0 = Math.max(0, Math.floor(this.dirtySunMin) - spread);
     const x1 = Math.min(this.w - 1, Math.ceil(this.dirtySunMax) + spread);
     this.computeSunlightBand(x0, x1);

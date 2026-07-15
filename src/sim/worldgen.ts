@@ -147,7 +147,7 @@ export function generateWorld(world: World, seed: number): GenResult {
  */
 export function pointSpawn(world: World, pointId: number): { x: number; y: number } {
   const p = world.regions.points[pointId];
-  const sx = p.flagPole.x + (pointId === 4 ? 3 : -3);
+  const sx = p.flagPole.x + (pointId === 4 ? 6 : -6);
   return { x: sx, y: world.surfaceY[sx] - 0.5 };
 }
 
@@ -236,7 +236,7 @@ function fillStrata(world: World, seed: number): void {
         // Shallow band: topsoil with root mats near the surface
         if (
           y - surf < G.rootMatDepth &&
-          fbm2(seed + 41, x * 0.06, y * 0.06, 2) > G.rootMatThreshold
+          fbm2(seed + 41, x * 0.03, y * 0.03, 2) > G.rootMatThreshold
         ) {
           t = Tile.RootMat;
         } else {
@@ -244,7 +244,7 @@ function fillStrata(world: World, seed: number): void {
         }
       } else if (y < clayBot) {
         // Clay band with occasional loam lenses
-        t = fbm2(seed + 53, x * 0.025, y * 0.045, 2) > G.loamLensThreshold ? Tile.Topsoil : Tile.Clay;
+        t = fbm2(seed + 53, x * 0.0125, y * 0.0225, 2) > G.loamLensThreshold ? Tile.Topsoil : Tile.Clay;
       } else if (y < rockTop - B.chalkRockDither) {
         t = Tile.Chalk;
       } else if (y < rockTop) {
@@ -291,7 +291,7 @@ function stampBlobs(
     let cx = -1;
     const reach = rx * 1.6 + G.blobPointMargin;
     for (let attempt = 0; attempt < 20; attempt++) {
-      const c = rng.range(8, w - 8);
+      const c = rng.range(16, w - 16);
       if (!layout.footprints.some((f) => c > f.x0 - reach && c < f.x1 + reach)) {
         cx = c;
         break;
@@ -311,7 +311,7 @@ function stampBlobs(
         if (cur === Tile.Air || cur === Tile.Rock) continue; // never fill air; respect bedrock
         const dx = (x - cx) / rx;
         const dy = (y - cy) / ry;
-        const edge = 1 + (fbm2(noiseSeed, x * 0.075, y * 0.075, 2) - 0.5) * 2 * G.blobEdgeNoise;
+        const edge = 1 + (fbm2(noiseSeed, x * 0.0375, y * 0.0375, 2) - 0.5) * 2 * G.blobEdgeNoise;
         if (dx * dx + dy * dy <= edge) {
           world.tiles[y * w + x] = tile;
         }
@@ -358,9 +358,9 @@ function stampCurtains(world: World, rng: PRNG, seed: number, layout: Layout): C
       // A gap window must be free of water (a water pocket in a gap kills it)
       // and of rock (basement dither). Scan wider than the wall so the
       // approach on both sides is clean too.
-      const scanHalf = Math.ceil(maxHalf) + 6;
+      const scanHalf = Math.ceil(maxHalf) + 12;
       const windowClean = (cy: number): boolean => {
-        for (let y = cy - hh - 2; y <= cy + hh + 2; y++) {
+        for (let y = cy - hh - 4; y <= cy + hh + 4; y++) {
           for (let x = cx - scanHalf; x <= cx + scanHalf; x++) {
             const t = world.getTile(x, y);
             if (t === Tile.Water || t === Tile.Rock) return false;
@@ -434,8 +434,8 @@ function stampCurtains(world: World, rng: PRNG, seed: number, layout: Layout): C
       // rock. Gap rows are skipped entirely (native strata stay in place).
       let minX = cx;
       let maxX = cx;
-      const yTop = Math.min(world.groundY[Math.max(0, cx - 8)], ground, world.groundY[Math.min(world.w - 1, cx + 8)]);
-      const yBottom = Math.min(world.h - 1, clayBot + B.basementChalkRows + 6);
+      const yTop = Math.min(world.groundY[Math.max(0, cx - 16)], ground, world.groundY[Math.min(world.w - 1, cx + 16)]);
+      const yBottom = Math.min(world.h - 1, clayBot + B.basementChalkRows + 12);
       for (let y = yTop; y <= yBottom; y++) {
         if (gaps.some((g) => y >= g.y0 && y <= g.y1)) continue;
         const wobble = (noise1(wseed, y * C.edgeWarpFreq) - 0.5) * 2 * C.edgeWarpAmp;
@@ -485,7 +485,7 @@ function finalizeGaps(world: World, curtains: CurtainRegion[]): void {
   const clearance = Math.ceil(CONFIG.player.height); // a standard 4-tall tunnel
   for (const c of curtains) {
     for (const g of c.gaps) {
-      g.usable = tunnelCrossingExists(world, c.x0 - 6, c.x1 + 6, g.y0 - 4, g.y1 + 4, clearance);
+      g.usable = tunnelCrossingExists(world, c.x0 - 12, c.x1 + 12, g.y0 - 8, g.y1 + 8, clearance);
       g.sandGap = false;
       for (let y = g.y0; y <= g.y1 && !g.sandGap; y++) {
         for (let x = c.x0; x <= c.x1; x++) {
@@ -560,8 +560,8 @@ function carveTrenchPoint(world: World, f: Footprint, sapDirs: (-1 | 1)[]): Tren
       // The ceiling must clear a soldier still standing on the floor up to two
       // columns behind (his AABB straddles 3 columns), or he wedges on the way
       // down — and he needs a spare tile of headroom to step back UP the slope.
-      const gFloorBack = floorY + Math.floor(Math.max(0, d - 2) / 3);
-      const carveTop = gFloorBack - G.sapHeight - (d > 0 ? 1 : 0);
+      const gFloorBack = floorY + Math.floor(Math.max(0, d - 4) / 3);
+      const carveTop = gFloorBack - G.sapHeight - (d > 0 ? 2 : 0);
       for (let y = carveTop; y <= gFloor - 1; y++) {
         world.tiles[y * world.w + x] = Tile.Air;
       }
@@ -656,17 +656,17 @@ function carveCrater(
         m === 0 ? rng.range(0.72, 0.9) : m === 1 ? rng.range(0.25, 0.45) : rng.range(0.3, 0.85);
       mFloor = Math.round(groundLine + C.depth * frac);
       // Mouths must sit at DIFFERENT depths — that's the crater's identity
-      if (usedFloors.every((u) => Math.abs(u - mFloor) >= 3)) break;
+      if (usedFloors.every((u) => Math.abs(u - mFloor) >= 6)) break;
     }
     usedFloors.push(mFloor);
     // Walk outward from center until the bowl floor rises above the mouth
     // depth — that column is the wall face at this depth.
     let wx = cx;
-    while (wx > f.x0 + 2 && wx < f.x1 - 2 && world.surfaceY[wx] >= mFloor) wx += side;
+    while (wx > f.x0 + 4 && wx < f.x1 - 4 && world.surfaceY[wx] >= mFloor) wx += side;
     const len = rng.int(C.mouthLenMin, C.mouthLenMax);
     for (let d = 0; d <= len; d++) {
       const x = wx + side * d;
-      if (x < f.x0 + 1 || x > f.x1 - 1) break;
+      if (x < f.x0 + 2 || x > f.x1 - 2) break;
       for (let y = mFloor - C.mouthHeight; y <= mFloor - 1; y++) {
         world.tiles[y * world.w + x] = Tile.Air;
       }
@@ -730,7 +730,7 @@ function carveRun(
   const dir = toX >= fromX ? 1 : -1;
   const n = Math.abs(toX - fromX);
   const clampFloor = (v: number) =>
-    Math.max(fromFloor - n, Math.min(fromFloor + n, Math.max(8, Math.min(world.h - 10, v))));
+    Math.max(fromFloor - n, Math.min(fromFloor + n, Math.max(16, Math.min(world.h - 20, v))));
 
   let target = clampFloor(wantFloor);
   const planFloors = (f1: number): number[] => {
@@ -741,7 +741,7 @@ function carveRun(
   const hitsWater = (fs: number[]): boolean => {
     for (let i = 0; i <= n; i++) {
       const x = fromX + dir * i;
-      const top = Math.min(fs[i], fs[Math.max(0, i - 2)]) - height - 1;
+      const top = Math.min(fs[i], fs[Math.max(0, i - 4)]) - height - 2;
       for (let y = top; y <= fs[i]; y++) {
         if (world.getTile(x, y) === Tile.Water) return true;
       }
@@ -752,7 +752,7 @@ function carveRun(
   let floors = planFloors(target);
   if (rng) {
     for (let attempt = 0; attempt < retries && hitsWater(floors); attempt++) {
-      const off = (attempt % 2 === 0 ? 1 : -1) * (2 + 2 * Math.floor(attempt / 2));
+      const off = (attempt % 2 === 0 ? 1 : -1) * (4 + 4 * Math.floor(attempt / 2));
       target = clampFloor(wantFloor + off + rng.int(0, 1));
       floors = planFloors(target);
     }
@@ -767,8 +767,8 @@ function carveRun(
     const x = fromX + dir * i;
     if (x < 1 || x >= world.w - 1) break;
     const fH = floors[i];
-    const fB = floors[Math.max(0, i - 2)];
-    const top = Math.min(fH, fB) - height - (sloped ? 1 : 0);
+    const fB = floors[Math.max(0, i - 4)];
+    const top = Math.min(fH, fB) - height - (sloped ? 2 : 0);
     for (let y = top; y <= fH - 1; y++) {
       if (!world.inBounds(x, y)) continue;
       world.tiles[y * world.w + x] = Tile.Air;
@@ -866,7 +866,7 @@ function carveNetwork(
   let cx = sapEnd.x;
   let cf = sapEnd.floorY;
 
-  const approach = rng.int(5, 9);
+  const approach = rng.int(10, 18);
   let r = carveRun(world, cx, cf, cx - approach, cf, gh, rec, null, 0);
   segments.push(r.rect);
   cx -= approach;
@@ -875,7 +875,7 @@ function carveNetwork(
   // Curtains between the shaft and the terminus, east → west. The mainline
   // may ONLY cross a curtain through a gap — carving rock is forbidden.
   const crossings = curtains
-    .filter((c) => c.x1 < cx - 4 && c.x0 > targetX)
+    .filter((c) => c.x1 < cx - 8 && c.x0 > targetX)
     .sort((a, b) => b.x1 - a.x1);
   const nearestGap = (c: CurtainRegion, y: number): CurtainGap => {
     let gap = c.gaps[0];
@@ -888,10 +888,10 @@ function carveNetwork(
   // Access shaft: aim for mid-clay, but if the first curtain is too close for
   // a ≤45° drive to reach its gap, sink the shaft to gap depth directly
   // (deep laddered shafts are period-accurate; rock-cut galleries are not).
-  let gy = Math.max(depthAt(cx), cf + 8);
+  let gy = Math.max(depthAt(cx), cf + 16);
   if (crossings.length > 0) {
     const g0 = nearestGap(crossings[0], gy);
-    const dist = cx - (crossings[0].x1 + 5);
+    const dist = cx - (crossings[0].x1 + 10);
     if (Math.abs(g0.y1 - 1 - gy) > dist) gy = g0.y1 - 1;
   }
   segments.push(carveShaft(world, cx, cf, gy, N.shaftWidth, true, rec));
@@ -903,16 +903,16 @@ function carveNetwork(
     // the enemy are competent tunnellers)
     const gap = nearestGap(c, cf);
     const gFloor = gap.y1 - 1;
-    r = carveRun(world, cx, cf, c.x1 + 5, gFloor, gh, rec, rng, N.waterRetries);
+    r = carveRun(world, cx, cf, c.x1 + 10, gFloor, gh, rec, rng, N.waterRetries);
     segments.push(r.rect);
     r.floors.forEach((v, k) => mainFloors.set(k, v));
-    cx = c.x1 + 5;
+    cx = c.x1 + 10;
     cf = r.endFloor;
     nodes.push({ x: cx, y: cf });
     if (cf !== gFloor) {
       // Slope or water-nudge shortfall: connect down/up to gap depth with a
       // laddered shaft rather than ever carving the curtain's rock.
-      const yTop = Math.min(cf, gFloor) - 4;
+      const yTop = Math.min(cf, gFloor) - 8;
       const yBot = Math.max(cf, gFloor);
       segments.push(carveShaft(world, cx, yTop, yBot, N.shaftWidth, true, rec));
       cf = gFloor;
@@ -920,10 +920,10 @@ function carveNetwork(
     }
     // The crossing itself: dead level through the gap, no water nudging (the
     // window was screened at gap placement; nudging could climb into rock).
-    r = carveRun(world, cx, cf, c.x0 - 5, gFloor, gh, rec, null, 0);
+    r = carveRun(world, cx, cf, c.x0 - 10, gFloor, gh, rec, null, 0);
     segments.push(r.rect);
     r.floors.forEach((v, k) => mainFloors.set(k, v));
-    cx = c.x0 - 5;
+    cx = c.x0 - 10;
     cf = r.endFloor;
     nodes.push({ x: cx, y: cf });
   }
@@ -940,13 +940,13 @@ function carveNetwork(
   const clampEastOfCurtains = (fromX: number, toX: number): number => {
     let v = toX;
     for (const c of curtains) {
-      if (c.x1 + 4 < fromX && c.x1 + 4 > v) v = c.x1 + 4;
+      if (c.x1 + 8 < fromX && c.x1 + 8 > v) v = c.x1 + 8;
     }
     return Math.max(v, centerF.x1 + N.centerMargin);
   };
   const junctionXs = [...mainFloors.keys()].sort((a, b) => a - b);
   const pickJunction = (): { x: number; y: number } | null => {
-    if (junctionXs.length < 10) return null;
+    if (junctionXs.length < 20) return null;
     const i = rng.int(Math.floor(junctionXs.length * 0.1), Math.floor(junctionXs.length * 0.85));
     const x = junctionXs[i];
     return { x, y: mainFloors.get(x)! };
@@ -959,10 +959,10 @@ function carveNetwork(
     if (!j) break;
     const len = rng.int(N.branchLenMin, N.branchLenMax);
     const endX = clampEastOfCurtains(j.x, j.x - len);
-    if (endX >= j.x - 4) continue; // no room — degenerate branch, skip
+    if (endX >= j.x - 8) continue; // no room — degenerate branch, skip
     const cb = world.bandClayBottomY[endX];
     const sb = world.bandShallowBottomY[endX];
-    const endF = Math.max(sb + 8, Math.min(cb + 10, j.y + rng.int(-6, 14)));
+    const endF = Math.max(sb + 16, Math.min(cb + 20, j.y + rng.int(-12, 28)));
     const br = carveRun(world, j.x, j.y, endX, endF, gh, rec, rng, N.waterRetries);
     segments.push(br.rect);
     branches.push({
@@ -993,16 +993,16 @@ function carveNetwork(
     const dir: -1 | 1 = rng.chance(0.5) ? 1 : -1;
     let endX = j.x + dir * len;
     if (dir === -1) endX = clampEastOfCurtains(j.x, endX);
-    if (Math.abs(endX - j.x) < 2) continue;
-    const st = carveRun(world, j.x, j.y - 1, endX, j.y - 1, 3, rec, null, 0); // cramped listening post
+    if (Math.abs(endX - j.x) < 4) continue;
+    const st = carveRun(world, j.x, j.y - 2, endX, j.y - 2, 6, rec, null, 0); // cramped listening post
     segments.push(st.rect);
     branches.push({
       id: nextId++,
       kind: 'stub',
       deadEnd: false,
       nodes: [
-        { x: j.x, y: j.y - 1 },
-        { x: endX, y: j.y - 1 },
+        { x: j.x, y: j.y - 2 },
+        { x: endX, y: j.y - 2 },
       ],
     });
   }
@@ -1053,14 +1053,14 @@ function carveWorkings(
   for (let k = 0; k < count; k++) {
     for (let attempt = 0; attempt < K.placeRetries; attempt++) {
       const iv = K.intervals[rng.int(0, K.intervals.length - 1)];
-      const ix0 = layout.footprints[iv].x1 + 7;
-      const ix1 = layout.footprints[iv + 1].x0 - 7;
-      const sx = rng.int(ix0 + 10, ix1 - 10);
+      const ix0 = layout.footprints[iv].x1 + 14;
+      const ix1 = layout.footprints[iv + 1].x0 - 14;
+      const sx = rng.int(ix0 + 20, ix1 - 20);
       const ground = world.groundY[sx];
       const sb = world.bandShallowBottomY[sx];
       const cb = world.bandClayBottomY[sx];
-      const yLo = Math.max(ground + K.minDepth, sb - 8);
-      const yHi = cb - 10;
+      const yLo = Math.max(ground + K.minDepth, sb - 16);
+      const yHi = cb - 20;
       if (yLo >= yHi) continue;
       const sy = rng.int(yLo, yHi);
 
@@ -1074,7 +1074,7 @@ function carveWorkings(
       let dir = rng.chance(0.5) ? 1 : -1;
       for (let s = 0; s < nSeg; s++) {
         const len = rng.int(K.segLenMin, K.segLenMax);
-        const dy = rng.int(-2, 3);
+        const dy = rng.int(-4, 6);
         runs.push({ x0: x, f0: fl, x1: x + dir * len, f1: fl + dy });
         x += dir * len;
         fl += dy;
@@ -1112,11 +1112,11 @@ function carveWorkings(
       if (bx0 < ix0 || bx1 > ix1) continue;
       let ok = true;
       for (let xx = bx0; xx <= bx1 && ok; xx++) {
-        if (by0 < world.groundY[Math.max(0, Math.min(world.w - 1, xx))] + K.minDepth - 4) ok = false;
+        if (by0 < world.groundY[Math.max(0, Math.min(world.w - 1, xx))] + K.minDepth - 8) ok = false;
       }
       if (!ok) continue;
-      if (by1 > world.bandClayBottomY[sx] + CONFIG.gen.bands.basementChalkRows - 10) continue;
-      if (curtains.some((c) => bx1 >= c.x0 - 4 && bx0 <= c.x1 + 4)) continue;
+      if (by1 > world.bandClayBottomY[sx] + CONFIG.gen.bands.basementChalkRows - 20) continue;
+      if (curtains.some((c) => bx1 >= c.x0 - 8 && bx0 <= c.x1 + 8)) continue;
       if (gapBoxes.some((g) => bx1 >= g.x0 && bx0 <= g.x1 && by1 >= g.y0 && by0 <= g.y1)) continue;
       // Never overlap another working's bounds (+margin) — each is an
       // ISOLATED pocket; the air scan below covers real air, this covers

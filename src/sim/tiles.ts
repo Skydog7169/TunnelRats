@@ -53,7 +53,11 @@ for (let t = 0; t < TILE_COUNT; t++) {
   }
   const m = CONFIG.materials[mat];
   TILE_SOLID[t] = 1; // everything but air is solid in v1 (water is inert/solid)
-  TILE_DIG_TICKS[t] = m.digTime > 0 ? Math.max(1, Math.round(m.digTime * CONFIG.sim.tickRate)) : 0;
+  // FRACTIONAL ticks are legal (r9, 4px tiles): fast materials need < 1 tick
+  // per tile or the integer floor silently multiplies their physical dig time
+  // as tiles shrink. digProgress is float; a swing's share clears several
+  // sub-tick tiles at once, exactly like it splits across a window.
+  TILE_DIG_TICKS[t] = m.digTime > 0 ? m.digTime * CONFIG.sim.tickRate : 0;
   TILE_STABILITY[t] = m.stability;
   TILE_NOISE_RADIUS[t] = m.noiseRadius;
 }

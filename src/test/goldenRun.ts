@@ -36,21 +36,24 @@ export interface GoldenResult {
 }
 
 /**
- * Fixed script against GOLDEN_SEED's worldgen-v3 geometry: spawn ≈ x28 on the
- * west trench floor (y≈37), ladder up the enemy-facing wall at column 37, sap
- * mouth at (38,37) declining east to ≈(49,41). Aim points are absolute world
- * coordinates chosen so the aim DIRECTION is level / steep-up / steep-down /
- * vertical as intended. Open-loop: same commands every run, no feedback.
+ * Fixed script against GOLDEN_SEED's worldgen-v3 geometry at 4px tiles (r9):
+ * spawn ≈ x56 on the west trench floor, ladder up the enemy-facing wall, sap
+ * mouth declining east. Aim points are absolute world coordinates chosen so
+ * the aim DIRECTION is level / steep-up / steep-down / vertical as intended
+ * (all doubled with the r9 rescale — directions identical). Tick counts are
+ * unchanged from the 8px script: speeds and distances doubled together, so
+ * every phase covers the same physical ground. Open-loop: same commands
+ * every run, no feedback from sim state.
  */
 export function buildScript(): InputCommand[] {
   const cmds: InputCommand[] = [];
   const push = (ticks: number, mod: Partial<InputCommand>) => {
     for (let i = 0; i < ticks; i++) cmds.push({ ...emptyCommand(), ...mod });
   };
-  const AIM_LEVEL = { aimX: 5000, aimY: 40 }; // far right, ~level from the trench area
-  const AIM_UP = { aimX: 2000, aimY: -1400 }; // up-right, slope ≈ -0.7
-  const AIM_DOWN = { aimX: 700, aimY: 560 }; // down-right, slope ≈ +0.8 from x≈60
-  const AIM_VERT = { aimX: 68, aimY: 5000 }; // straight down from the dig area
+  const AIM_LEVEL = { aimX: 10000, aimY: 80 }; // far right, ~level from the trench area
+  const AIM_UP = { aimX: 4000, aimY: -2800 }; // up-right, slope ≈ -0.7
+  const AIM_DOWN = { aimX: 1400, aimY: 1120 }; // down-right, slope ≈ +0.8 from x≈120
+  const AIM_VERT = { aimX: 136, aimY: 10000 }; // straight down from the dig area
 
   push(30, {}); // settle at spawn
   push(1, { swapLamp: true }); // armorer swap (in home trench)
@@ -106,7 +109,7 @@ function runOnce(): { sim: Sim; coverage: GoldenResult['coverage'] } {
   for (const cmd of script) {
     sim.step(cmd);
     const p = sim.player;
-    if (Math.abs(p.x - startX) > 2) coverage.walked = true;
+    if (Math.abs(p.x - startX) > 4) coverage.walked = true;
     if (!p.grounded && !p.onLadder) coverage.jumped = true;
     if (p.onLadder) coverage.climbedLadder = true;
     if (p.crouching) coverage.everCrouched = true;
@@ -118,10 +121,10 @@ function runOnce(): { sim: Sim; coverage: GoldenResult['coverage'] } {
     const py = Math.floor(p.y - 0.001);
     const sapFar = sap.x + sap.dir * (CONFIG.gen.sapLength - 1);
     if (
-      px >= Math.min(sap.x + 2 * sap.dir, sapFar) &&
-      px <= Math.max(sap.x + 2 * sap.dir, sapFar) &&
-      py >= sap.y - 2 &&
-      py <= sap.y + 8
+      px >= Math.min(sap.x + 4 * sap.dir, sapFar) &&
+      px <= Math.max(sap.x + 4 * sap.dir, sapFar) &&
+      py >= sap.y - 4 &&
+      py <= sap.y + 16
     ) {
       coverage.enteredSap = true;
     }

@@ -207,11 +207,12 @@ export function validateSeed(seed: number): SeedReport {
  * dig corridor of interval `i` (between points i and i+1).
  *
  * Corridor definition (deterministic, documented here): the x range is the
- * interval between the two footprints. The row band spans from 4 rows above
- * the shallower of the two point floors (the passage band a level digger
- * occupies leaving a sap) down to 8 rows below the deeper floor (room for
- * shallow-ramp drift), clamped per column to start at least 2 rows below the
- * natural ground line (a digger stays underground; surface dips don't count).
+ * interval between the two footprints. The row band spans from one passage
+ * height (ceil(player.height)) above the shallower of the two point floors
+ * (the band a level digger occupies leaving a sap) down to 16 rows below the
+ * deeper floor (room for shallow-ramp drift), clamped per column to start at
+ * least 4 rows below the natural ground line (a digger stays underground;
+ * surface dips don't count).
  *
  * A column is featureless iff EVERY corridor tile in it is plain topsoil or
  * root mat — anything else (sand pocket, rock/curtain, chalk or clay tell
@@ -224,13 +225,13 @@ function featurelessSpan(world: World, regions: WorldRegions, i: number): number
   const b = regions.points[i + 1];
   const floorA = a.floor.y1 + 1;
   const floorB = b.floor.y1 + 1;
-  const yTop = Math.min(floorA, floorB) - 4;
-  const yBot = Math.max(floorA, floorB) + 8;
+  const yTop = Math.min(floorA, floorB) - Math.ceil(CONFIG.player.height);
+  const yBot = Math.max(floorA, floorB) + 16;
 
   let run = 0;
   let longest = 0;
   for (let x = a.footprint.x1 + 1; x < b.footprint.x0; x++) {
-    const y0 = Math.max(yTop, world.groundY[x] + 2);
+    const y0 = Math.max(yTop, world.groundY[x] + 4);
     let clean = true;
     for (let y = y0; y <= yBot; y++) {
       const t = world.getTile(x, y);

@@ -36,3 +36,9 @@ Note: any intentional sim/worldgen change between now and Phase 4 (there will be
 stability, items, noise) also breaks these hashes for benign reasons. That is fine: the Phase 4
 test's assertion is *the soldier dies on the surface*, demonstrated by divergence + death state,
 not mere hash inequality. Keep the death check primary.
+
+⚠ Coordinate scale: these sessions were recorded on the r8-era **8px** build (world 960×224).
+r9 halved tiles to 4px (1920×448): to drive the future replay, double the recorded `aimX`/`aimY`
+values (movement/flag inputs are scale-free). The world layout itself also regenerated at the
+new scale, so the Phase 4 harness should reproduce the *scenario* (surface walk east from the
+west trench), not expect tile-exact geometry.
