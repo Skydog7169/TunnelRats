@@ -26,7 +26,7 @@
 //
 // Executed headlessly by scripts/worldgen.mjs (npm run test:worldgen).
 
-import { CONFIG } from '../config';
+import { CONFIG, MAX_FEATURELESS_SPAN_TILES } from '../config';
 import { hash2 } from '../core/prng';
 import { tunnelCrossingExists, WorldRegions } from '../sim/regions';
 import { Tile, TILE_DIG_TICKS, TILE_SOLID } from '../sim/tiles';
@@ -40,6 +40,7 @@ export interface SeedReport {
   intervals: number[]; // 4, west → east
   gapsPerCurtain: { total: number; usable: number; clayUsable: number; sand: number }[];
   legSeconds: (number | null)[]; // 4 legs west → east; null = unreachable
+  featurelessSpans: number[]; // 4 intervals: longest feature-free run, tiles
   failures: string[]; // empty = seed passes
 }
 
@@ -156,6 +157,22 @@ export function validateSeed(seed: number): SeedReport {
     }
   }
 
+  // --- 8. featureless-span check (Stage 4 follow-up — the punctuation gate's
+  // structural counterpart). See featurelessSpan() for the corridor definition.
+  const featurelessSpans: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const span = featurelessSpan(world, R, i);
+    featurelessSpans.push(span);
+    if (span > MAX_FEATURELESS_SPAN_TILES) {
+      const sPerTile =
+        CONFIG.materials.topsoil.digTime * V.pacingTunnelRows + 1 / CONFIG.player.walkSpeed;
+      failures.push(
+        `interval ${i}: featureless span ${span} tiles > ${MAX_FEATURELESS_SPAN_TILES} ` +
+          `(≈${Math.round(span * sPerTile)}s of uninterrupted digging)`,
+      );
+    }
+  }
+
   // --- 7. pacing proxy ----------------------------------------------------------
   const legSeconds: (number | null)[] = [];
   for (let i = 0; i < 4; i++) {
@@ -180,8 +197,61 @@ export function validateSeed(seed: number): SeedReport {
     intervals,
     gapsPerCurtain,
     legSeconds,
+    featurelessSpans,
     failures,
   };
+}
+
+/**
+ * Longest contiguous horizontal run of FEATURE-FREE columns in the plausible
+ * dig corridor of interval `i` (between points i and i+1).
+ *
+ * Corridor definition (deterministic, documented here): the x range is the
+ * interval between the two footprints. The row band spans from 4 rows above
+ * the shallower of the two point floors (the passage band a level digger
+ * occupies leaving a sap) down to 8 rows below the deeper floor (room for
+ * shallow-ramp drift), clamped per column to start at least 2 rows below the
+ * natural ground line (a digger stays underground; surface dips don't count).
+ *
+ * A column is featureless iff EVERY corridor tile in it is plain topsoil or
+ * root mat — anything else (sand pocket, rock/curtain, chalk or clay tell
+ * seam, water, rubble/timber, pre-dug air of a working or gallery, band clay)
+ * is an event a digger would notice. The threshold MAX_FEATURELESS_SPAN_TILES
+ * is derived in config.ts from dig rates × the punctuation ceiling.
+ */
+function featurelessSpan(world: World, regions: WorldRegions, i: number): number {
+  const a = regions.points[i];
+  const b = regions.points[i + 1];
+  const floorA = a.floor.y1 + 1;
+  const floorB = b.floor.y1 + 1;
+  const yTop = Math.min(floorA, floorB) - 4;
+  const yBot = Math.max(floorA, floorB) + 8;
+
+  let run = 0;
+  let longest = 0;
+  for (let x = a.footprint.x1 + 1; x < b.footprint.x0; x++) {
+    const y0 = Math.max(yTop, world.groundY[x] + 2);
+    let clean = true;
+    for (let y = y0; y <= yBot; y++) {
+      const t = world.getTile(x, y);
+      if (t !== Tile.Topsoil && t !== Tile.RootMat) {
+        clean = false;
+        break;
+      }
+    }
+    if (clean) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  return longest;
+}
+
+/** Exposed for the runner script's summary line. */
+export function maxFeaturelessSpanTiles(): number {
+  return MAX_FEATURELESS_SPAN_TILES;
 }
 
 export function runBatch(): { reports: SeedReport[]; pass: boolean } {

@@ -198,6 +198,10 @@ export const CONFIG = {
     // while a true 60 s freebie or 600 s slog still fails loudly.
     pacingMinS: 80,
     pacingMaxS: 300,
+    // The playtest gate's punctuation ceiling: something map-driven must
+    // interrupt a digger at least this often (PLAYTEST.md). Feeds the
+    // featureless-span batch check via MAX_FEATURELESS_SPAN_TILES below.
+    punctuationCeilingS: 90,
   },
 
   // --------------------------------------------------------------------------
@@ -306,3 +310,24 @@ export const CONFIG = {
 } as const;
 
 export type MaterialKey = keyof typeof CONFIG.materials;
+
+// ---------------------------------------------------------------------------
+// Longest allowed featureless dig run between adjacent capture points, in
+// tiles — DERIVED, not guessed (batch-validator spec check, Stage 4 follow-up).
+//
+// A digger advancing through clean shallow earth clears a player-height
+// column per tile of advance and walks in behind it, so the sustained rate is
+//   topsoil.digTime × pacingTunnelRows + 1/walkSpeed   seconds per tile
+//   = 0.12 × 4 + 0.1 = 0.58 s/tile
+// (playtest run 1 on seed 54715452 measured ≈0.6–0.76 s/tile live — the
+// model holds). The punctuation gate says something must interrupt the digger
+// every punctuationCeilingS seconds, so the map may never present more than
+//   90 s ÷ 0.58 s/tile ≈ 155 tiles
+// of feature-free earth in the dig corridor. Recompute automatically if dig
+// times, tunnel height, walk speed, or the gate ceiling ever change.
+// ---------------------------------------------------------------------------
+export const MAX_FEATURELESS_SPAN_TILES = Math.floor(
+  CONFIG.validation.punctuationCeilingS /
+    (CONFIG.materials.topsoil.digTime * CONFIG.validation.pacingTunnelRows +
+      1 / CONFIG.player.walkSpeed),
+);

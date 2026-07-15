@@ -39,6 +39,19 @@ hold on 3+ seeds.*
 5. AFTER the run, `` ` `` + `B`×3 (region view) to review what the map had placed vs what you
    found — tells you whether tells/gaps are discoverable, but spoils the seed, so always last.
 
+### Probing (standard procedure at curtains)
+
+When the pick **clinks on rock** (sparks fly), do not commit to a new direction blind — **sweep
+the aim across the face and the rows above/below** while still swinging: the telegraphed
+outline is the probe. **White outline = diggable. Red outline = rock/water — don't bother.**
+A gap in a curtain is a window of white on an otherwise red wall; a tell seam says "somewhere
+near here," and the probe closes the last few tiles. Treat *dig → stop → probe → dig* as the
+standard rhythm at every curtain face (playtest run 1 on seed 54715452 dug vertically THROUGH
+an open gap without noticing it — the probe would have caught it in one sweep).
+
+*Design rationale:* pick-probing is the v1 stand-in for the Phase 3 geophone rhythm — stop,
+sense, then act. The tell narrows the search; the probe finishes it.
+
 ## Seeds (from the validated 50-seed batch — spread across the pacing distribution)
 
 | # | URL | West-leg proxy estimate | Why it's in the panel |

@@ -23,11 +23,14 @@ try {
   const fmtLeg = (l) => (l === null ? '  ——' : String(Math.round(l)).padStart(4));
   const fmtGaps = (g) => `${g.usable}/${g.total}${g.clayUsable > 0 ? 'c' : '!'}${g.sand > 0 ? 's' : ''}`;
 
+  const maxSpan = mod.maxFeaturelessSpanTiles();
+  console.log(`featureless-span ceiling: ${maxSpan} tiles (derived — see config.ts)\n`);
   console.log(
     'seed'.padStart(11) +
       '  intervals (tiles)   ' +
       'gaps/curtain (usable/total, c=clay ok, s=sand)  ' +
-      'legs P0→P1→P2→P3→P4 (est s)  result',
+      'legs P0→P1→P2→P3→P4 (est s)  ' +
+      'max featureless span/interval  result',
   );
   for (const r of reports) {
     const line =
@@ -38,6 +41,8 @@ try {
       r.gapsPerCurtain.map(fmtGaps).join(' ').padEnd(28) +
       r.legSeconds.map(fmtLeg).join(' ') +
       '   ' +
+      r.featurelessSpans.map((v) => String(v).padStart(3) + (v > maxSpan ? '!' : ' ')).join(' ') +
+      '  ' +
       (r.failures.length === 0 ? 'PASS' : 'FAIL');
     console.log(line);
     for (const f of r.failures) console.log('             ✗ ' + f);
