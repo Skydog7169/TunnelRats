@@ -473,8 +473,13 @@ export class Player {
     };
 
     if (Math.abs(this.facingY) > Math.abs(this.facingX)) {
-      // Vertical dig: body-wide band at the anchor row
-      for (let o = -P.faceBiteSide; o <= P.faceBiteSide; o++) bite(ax + o, ay);
+      // Vertical dig: body-wide band, faceBiteDepth rows into the face
+      const stepY = this.facingY >= 0 ? 1 : -1;
+      for (let d = 0; d < P.faceBiteDepth; d++) {
+        for (let o = -P.faceBiteSide; o <= P.faceBiteSide; o++) {
+          bite(ax + o, ay + stepY * d);
+        }
+      }
     } else {
       // Horizontal-dominant dig: the player's own passage rows at the anchor
       // column. A LEVEL aim never shifts the window — the anchor only picks
@@ -499,16 +504,17 @@ export class Player {
       const colDist = Math.abs(ax - Math.floor(cx));
       const shift = colDist >= 1 ? this.rampDir : 0;
       const headroom = shift !== 0 ? 2 : 0; // 2 tiles at 4px = the r8 spare (wedge guard)
-      // Bite the window at EVERY column from just ahead of the digger to the
-      // anchor, not the anchor alone: a slow tile (root mat, clay) can outlive
-      // its window, and once the digger steps down/up past it the leftover
-      // lip sits outside the anchor fan's cone — stranded at head height,
-      // wedging the stair (r8 stall, caught by the headless stair test).
-      // Intermediate columns are almost always already air, so the swing's
-      // progress split barely changes; sweeping guarantees walking order.
+      // Bite the window at EVERY column from just ahead of the digger THROUGH
+      // the anchor and faceBiteDepth−1 columns beyond it:
+      // - sweeping back to the digger finishes slow leftovers in walking
+      //   order (a stranded head-height lip outside the fan's cone wedged
+      //   the stair — r8 stall, caught by the headless stair test);
+      // - biting deeper than the anchor spends the swing's surplus on cheap
+      //   materials instead of evaporating it (r9 — see faceBiteDepth).
       const stepX = this.facingX >= 0 ? 1 : -1;
+      const faceEnd = ax + stepX * (P.faceBiteDepth - 1);
       for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) {
-        for (let c = ownCol + stepX; stepX > 0 ? c <= ax : c >= ax; c += stepX) {
+        for (let c = ownCol + stepX; stepX > 0 ? c <= faceEnd : c >= faceEnd; c += stepX) {
           bite(c, r);
         }
       }

@@ -231,8 +231,13 @@ export const CONFIG = {
   // --------------------------------------------------------------------------
   player: {
     width: 2.4,          // AABB width, tiles
-    height: 7,           // standing height (fits 8-tile tunnels)
-    crouchHeight: 4.8,   // kneeling height (fits 6-tile crawlspaces — a knee, not a ball)
+    height: 6.9,         // standing height — NEVER an integer: with feet at a
+                         // row bottom (y = k−ε) an integer height needs
+                         // ceil(height)+1 collision rows while the dig window
+                         // carves ceil(height), so every fresh tunnel is one
+                         // row too short to walk into (r9 wedge bug — 3.5
+                         // dodged this at 8px by being fractional)
+    crouchHeight: 4.8,   // kneeling height (fits 5-tile crawlspaces — a knee, not a ball)
     walkSpeed: 20,       // tiles/s
     crouchSpeed: 7.6,    // tiles/s while crouched (crawlspace penalty)
     airControl: 0.75,    // fraction of walk accel while airborne
@@ -275,6 +280,13 @@ export const CONFIG = {
     anchorFanUpDeg: 75,  // anchor-fan spread above the aim (head lips sit steep)
     anchorFanDownDeg: 40, // spread below (enough for shin lips, misses the floor)
     faceBiteSide: 2,  // tiles each side of the contact (vertical digs — body-wide)
+    // r9: one blow bites this many columns (rows when vertical) INTO the face
+    // — a physical 8px mouthful at 4px tiles. Without it a swing's surplus
+    // energy is wasted on cheap materials (a 7-tile topsoil column needs 7.2
+    // tile-ticks of the swing's 16.5 and the rest evaporates), which silently
+    // HALVED physical dig speed at 4px. Expensive materials are unaffected
+    // (their progress carries over between swings either way).
+    faceBiteDepth: 2,
     // Stair mode (r8): a deliberately inclined aim carves exactly ONE step
     // up/down per face (symmetric ±1 — the old slope×distance shift could cut
     // 2–3-row pits on steep down-aims; playtest 2026-07-15). Hysteresis so
