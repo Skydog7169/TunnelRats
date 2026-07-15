@@ -27,7 +27,7 @@ export function drawDebugOverlay(
   const tileUnder = sim.world.getTile(playerTile.x, playerTile.y + 1) as Tile;
   const lines = [
     `fps ${dbg.fps.toFixed(0)}  tick ${sim.tickCount} @ ${CONFIG.sim.tickRate}Hz`,
-    `seed ${sim.seed}   (?seed=${sim.seed}, N = new seed)`,
+    `seed ${sim.seed}   (?seed=${sim.seed}${sim.startPoint !== 0 ? `&start=${sim.startPoint}` : ''}, N = new seed)`,
     `player tile ${playerTile.x},${playerTile.y}  vel ${p.vx.toFixed(1)},${p.vy.toFixed(1)}`,
     `standing on: ${TILE_NAME[tileUnder]}  band: ${sim.world.bandAt(playerTile.x, playerTile.y)}  crouch:${p.crouching ? 'y' : 'n'} grounded:${p.grounded ? 'y' : 'n'}`,
     `loadout: ${p.loadout.slots.map((s) => (s ? `${s.item}×${s.count}` : '—')).join(' | ')}`,

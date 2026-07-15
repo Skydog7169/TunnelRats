@@ -27,8 +27,21 @@ const seed =
     ? Number(seedParam) >>> 0
     : (Date.now() % 1_000_000_000) >>> 0;
 
+// ?start= capture-point spawn (Stage 5 playtest support). Accepts point2 /
+// p2 / 2 and the named aliases. The value becomes a Sim INPUT (recorded in
+// sessions), so replays reproduce regardless of the current URL.
+function parseStart(raw: string | null): number {
+  if (!raw) return 0;
+  const s = raw.toLowerCase();
+  const named: Record<string, number> = { west: 0, center: 2, crater: 2, east: 4 };
+  if (s in named) return named[s];
+  const n = Number(s.replace(/^point|^p/, ''));
+  return Number.isInteger(n) && n >= 0 && n <= 4 ? n : 0;
+}
+const startPoint = parseStart(params.get('start'));
+
 const canvas = document.getElementById('game') as HTMLCanvasElement;
-let sim = new Sim(seed);
+let sim = new Sim(seed, startPoint);
 const renderer = new Renderer(canvas, sim);
 const input = new InputManager(canvas);
 
@@ -43,8 +56,8 @@ function setStatus(msg: string): void {
 
 function startRecording(): void {
   // Recording must start from a reproducible state: restart the sim from the
-  // same seed at tick 0. (The world you dug so far is discarded — by design.)
-  sim = new Sim(sim.seed);
+  // same seed + start point at tick 0. (The world you dug is discarded — by design.)
+  sim = new Sim(sim.seed, sim.startPoint);
   renderer.attachSim(sim);
   recordedCommands = [];
   recording = true;
@@ -56,6 +69,7 @@ function stopRecording(): SessionV1 {
   const session: SessionV1 = {
     version: 1,
     seed: sim.seed,
+    start: sim.startPoint,
     commands: recordedCommands,
     finalHash: hashSimState(sim),
   };
@@ -64,7 +78,7 @@ function stopRecording(): SessionV1 {
 }
 
 function startReplay(session: SessionV1): void {
-  sim = new Sim(session.seed);
+  sim = new Sim(session.seed, session.start ?? 0);
   renderer.attachSim(sim);
   recording = false;
   replay = { session, index: 0 };
@@ -90,7 +104,7 @@ input.onToggleOverlay = () => (renderer.debug.overlayOn = !renderer.debug.overla
 input.onCycleView = () => (renderer.debug.viewMode = (renderer.debug.viewMode + 1) % VIEW_COUNT);
 input.onNewSeed = () => {
   const next = (Math.random() * 1_000_000_000) >>> 0; // outside the sim: fine
-  location.search = `?seed=${next}`;
+  location.search = `?seed=${next}${startPoint !== 0 ? `&start=${startPoint}` : ''}`;
 };
 input.onToggleRecord = () => {
   if (replay) return; // no recording while replaying
@@ -121,9 +135,9 @@ window.addEventListener('drop', async (e) => {
   }
 });
 
-// Keep the seed visible/shareable in the URL
+// Keep the seed (and any non-default start point) visible/shareable in the URL
 if (seedParam === null) {
-  history.replaceState(null, '', `?seed=${seed}`);
+  history.replaceState(null, '', `?seed=${seed}${startPoint !== 0 ? `&start=${startPoint}` : ''}`);
 }
 
 const TICK_MS = 1000 / CONFIG.sim.tickRate;

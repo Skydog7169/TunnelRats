@@ -1,7 +1,13 @@
 # Tunnel Rats — Claude Code project notes
 
 The full game design lives in [DESIGN.md](DESIGN.md). Read it before touching anything.
-We build **phase by phase** and stop for playtest feedback after each phase. Current status: **Phase 1 complete (7 playtest revisions); Phase 1.5 in progress — Stages 1–4 done (determinism harness, transcendental sweep, Loadout data stub, worldgen v3), awaiting checkpoint sign-off before Stage 5 (crossing playtest v2 support: `?start=`, pacing overlay, PLAYTEST.md).** Work Phase 1.5 stages strictly in order, one per session; do not build Phase 2+. Stage 4 checkpoint report: [CHECKPOINT-STAGE4.md](CHECKPOINT-STAGE4.md).
+We build **phase by phase** and stop for playtest feedback after each phase. Current status: **Phase 1 complete (7 playtest revisions); Phase 1.5 code complete — Stages 1–5 built (determinism harness, transcendental sweep, Loadout data stub, worldgen v3, crossing-playtest support). The phase exits through the HUMAN playtest gate in [PLAYTEST.md](PLAYTEST.md) — do not start Phase 2 until it passes.** Stage 4 checkpoint report: [CHECKPOINT-STAGE4.md](CHECKPOINT-STAGE4.md).
+
+## Crossing playtest support (Phase 1.5 Stage 5)
+
+- **`?start=`** URL param spawns at a capture point: `p0`–`p4` / `point2` / `west` / `center` / `crater` / `east`. It is a **Sim INPUT** (constructor arg, like the seed): sessions record it (`start` field, optional in the v1 format), replays reproduce it, `N` preserves it. Default 0 = west home — the golden test relies on that default and its hash did NOT change when this landed.
+- **Playtest HUD** (top center, `CONFIG.debug.playtestHud`): elapsed sim time · depth band at the player · distance to the next capture point east. Renderer-only, reads sim state, never hashed.
+- **[PLAYTEST.md](PLAYTEST.md)** defines the gate (~3–4 min to first meaningful decision, punctuation every 60–90 s, 3 named seeds spanning the proxy distribution), the per-run protocol (R-record everything), and the approved tuning levers — worldgen structure only; dig/movement/camera locked.
 
 ## Worldgen v3 (Phase 1.5 Stage 4)
 
@@ -80,4 +86,4 @@ We build **phase by phase** and stop for playtest feedback after each phase. Cur
 
 A/D or ←/→ move · W/Space jump (climbs ladders) · S crouch/climb down · mouse aim · hold LMB swing pick · F lamp on/off · G swap lamp (own trench only) · `` ` `` debug overlay · B cycle debug view (strata → stability → regions) · N new random seed (reloads with `?seed=`) · R record session (restarts world; R again downloads JSON) · H log state hash · drag-drop session JSON = replay
 
-`?seed=12345` URL param fixes the world seed.
+`?seed=12345` URL param fixes the world seed. `?start=p2` (or `west`/`center`/`crater`/`east`/`point0`–`point4`) spawns at that capture point.

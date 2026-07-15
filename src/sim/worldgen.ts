@@ -131,14 +131,24 @@ export function generateWorld(world: World, seed: number): GenResult {
     },
   };
   world.regions = regions;
-
-  const west = builds[0]!;
-  // Spawn a few tiles off-center so the soldier doesn't stand inside the flag pole.
   return {
-    spawnLeft: { x: west.x0 + G.trenchWidth / 2 - 3, y: west.floorY - 0.5 },
-    spawnRight: { x: east.x0 + G.trenchWidth / 2 + 3, y: east.floorY - 0.5 },
+    spawnLeft: pointSpawn(world, 0),
+    spawnRight: pointSpawn(world, 4),
     regions,
   };
+}
+
+/**
+ * Deterministic spawn position at a capture point (Stage 5 `?start=` support):
+ * a few tiles beside the flag pole, feet on the local floor. Works for
+ * trenches and the crater alike because carving keeps surfaceY = floor row.
+ * The start point is a SIM INPUT (like the seed): same seed + same start +
+ * same commands ⇒ identical state.
+ */
+export function pointSpawn(world: World, pointId: number): { x: number; y: number } {
+  const p = world.regions.points[pointId];
+  const sx = p.flagPole.x + (pointId === 4 ? 3 : -3);
+  return { x: sx, y: world.surfaceY[sx] - 0.5 };
 }
 
 // ===========================================================================

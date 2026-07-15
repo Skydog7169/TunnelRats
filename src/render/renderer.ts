@@ -953,6 +953,26 @@ export class Renderer {
       ctx.fillStyle = '#9fb8a0';
       ctx.fillText(`[G] armorer: swap to ${p.carriedLamp === 'head' ? 'hip lamp' : 'headlamp'}`, 12, 48);
     }
+
+    // Crossing-playtest line (Stage 5): elapsed sim time · depth band ·
+    // distance to the next capture point east. Reads sim state only.
+    if (CONFIG.debug.playtestHud) {
+      const sim = this.sim;
+      const secs = Math.floor(sim.tickCount / CONFIG.sim.tickRate);
+      const clock = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+      const px = Math.floor(p.x);
+      const band = sim.world.bandAt(px, Math.floor(p.y - 0.001));
+      const next = sim.world.regions?.points.find((pt) => pt.flagPole.x > p.x);
+      const nextTxt = next
+        ? `next: P${next.id} ${next.kind}${next.active ? ' ●' : ''} ${Math.ceil(next.flagPole.x - p.x)} tiles →`
+        : 'next: — (east end)';
+      const line = `⏱ ${clock}  ·  band: ${band}  ·  ${nextTxt}`;
+      const w = ctx.measureText(line).width;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(this.canvas.width / 2 - w / 2 - 10, 8, w + 20, 24);
+      ctx.fillStyle = '#cfc9b8';
+      ctx.fillText(line, this.canvas.width / 2 - w / 2, 13);
+    }
   }
 
   private drawDeathFlash(): void {

@@ -6,6 +6,8 @@
 // {
 //   "version": 1,
 //   "seed": 123456,             // world seed; replay reconstructs Sim from it
+//   "start": 0,                 // OPTIONAL (Stage 5): capture-point spawn id
+//                               // 0–4; omitted/0 = west home trench
 //   "commands": [ [moveX, flags, aimX, aimY], ... ],  // one entry per tick,
 //                               // starting at tick 0 of a FRESH sim
 //   "finalHash": "16-hex-chars" // hashSimState after the last command
@@ -21,6 +23,7 @@ export type SerializedCommand = [number, number, number, number];
 export interface SessionV1 {
   version: 1;
   seed: number;
+  start?: number; // capture-point spawn id (Sim startPoint); absent = 0
   commands: SerializedCommand[];
   finalHash: string;
 }
@@ -57,6 +60,7 @@ export function isValidSession(o: unknown): o is SessionV1 {
     !!s &&
     s.version === 1 &&
     typeof s.seed === 'number' &&
+    (s.start === undefined || (typeof s.start === 'number' && s.start >= 0 && s.start <= 4)) &&
     Array.isArray(s.commands) &&
     typeof s.finalHash === 'string'
   );

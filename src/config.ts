@@ -299,6 +299,9 @@ export const CONFIG = {
 
   debug: {
     enabledByDefault: false,
+    // Stage 5 crossing-playtest HUD line: elapsed sim time · depth band ·
+    // distance to the next capture point east. Renderer-only (never hashed).
+    playtestHud: true,
   },
 } as const;
 

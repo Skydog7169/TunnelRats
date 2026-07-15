@@ -8,18 +8,27 @@ import { cosDeg } from '../core/trig';
 import { DynamicLight, LightSource } from './light';
 import { Player } from './player';
 import { World } from './world';
-import { generateWorld } from './worldgen';
+import { generateWorld, pointSpawn } from './worldgen';
 export class Sim {
   readonly world: World;
   readonly player: Player;
   readonly rng: PRNG; // live-sim stream (worldgen used its own)
   tickCount = 0;
   private dynamicLight: DynamicLight;
-  constructor(readonly seed: number) {
+  /**
+   * `startPoint` (0–4, Stage 5 `?start=` playtest support) is a SIM INPUT
+   * like the seed: it picks which capture point the soldier spawns/respawns
+   * at. Sessions record it so replays reproduce. Default 0 = west home
+   * trench (v1 gameplay; the golden test relies on this default).
+   */
+  constructor(
+    readonly seed: number,
+    readonly startPoint: number = 0,
+  ) {
     this.world = new World();
-    const gen = generateWorld(this.world, seed);
+    generateWorld(this.world, seed);
     this.rng = new PRNG(seed).fork(1);
-    this.player = new Player(this.world, gen.spawnLeft);
+    this.player = new Player(this.world, pointSpawn(this.world, startPoint));
     this.dynamicLight = new DynamicLight(this.world);
     this.updateLights();
   }
