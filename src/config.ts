@@ -294,6 +294,15 @@ export const CONFIG = {
     // These are aim-slope fractions (|facingY| with |facingY|<|facingX|).
     rampAimEnter: 0.4, // enter stair mode above this
     rampAimExit: 0.3,  // leave stair mode below this (only while still digging)
+    // Vertical (shaft) mode — |aimY|/|aimX| ratio thresholds, WITH hysteresis
+    // (r9.2). The old boundary sat at exactly 45° = ratio 1, precisely where
+    // you point to tunnel diagonally: a diagonal aim flickered between the
+    // 5-wide shaft band and the passage window (60% of a playtest's diagonal
+    // dig time landed in shaft mode, 37 shape-flips/min — the "erratic
+    // aiming" complaint). Diagonals now stay in stair mode; shafts want a
+    // deliberately steep aim.
+    vertAimEnter: 1.6, // ≈58° from horizontal
+    vertAimExit: 1.1,  // ≈48° — drop back to passage cutting below this
   },
 
   // --------------------------------------------------------------------------

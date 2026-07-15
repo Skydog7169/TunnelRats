@@ -63,6 +63,13 @@ export class Player {
    * SIM STATE — registered in hashState.
    */
   rampDir: -1 | 0 | 1 = 0;
+  /**
+   * Shaft mode (r9.2): true = vertical dig window (body-wide band). Held with
+   * hysteresis (vertAimEnter/vertAimExit ratio thresholds) while digging —
+   * the old hard 45° boundary sat exactly on the diagonal aim and flickered
+   * the window shape mid-dig. SIM STATE — registered in hashState.
+   */
+  vertDig = false;
   /** Where the NEXT blow will land — recomputed every digging tick for the HUD/renderer.
    *  `ghost` telegraphs the next two stair steps (render hint only, fully derived). */
   digPreview: {
@@ -153,6 +160,7 @@ export class Player {
       h.f64(this.digProgress.get(k)!);
     }
     h.byte(this.rampDir + 1); // r8 stair mode (appended — append-only contract)
+    h.bool(this.vertDig); // r9.2 shaft mode (appended — append-only contract)
   }
 
   /** Standing inside the home (left) trench interior — the armorer's reach. */
@@ -344,18 +352,28 @@ export class Player {
   private updateDig(cmd: InputCommand): void {
     if (!cmd.dig) {
       this.swingTick = -1;
-      this.rampDir = 0; // stair mode holds only while continuously digging
+      this.rampDir = 0; // mode state holds only while continuously digging
+      this.vertDig = false;
       this.digPreview = { bites: [], clinks: [], ghost: [] };
       return;
     }
 
     const P = CONFIG.player;
 
-    // r8 stair-mode hysteresis: enter above rampAimEnter, leave below
-    // rampAimExit — near-threshold aim can no longer flicker the window
-    // between level and stair mid-dig. Sign follows the aim while engaged.
+    // Dig-mode hysteresis (r8 stair, r9.2 shaft). Shaft mode needs a
+    // deliberately steep aim (ratio thresholds around ~58°/48°) — the old
+    // hard 45° boundary sat exactly on the diagonal aim, so diagonal digging
+    // flickered between the shaft band and the passage window every few
+    // swings. Diagonals belong to stair mode. Sign follows the aim while a
+    // mode is engaged.
     const ay = Math.abs(this.facingY);
-    if (ay <= Math.abs(this.facingX)) {
+    const ratio = ay / Math.max(0.0001, Math.abs(this.facingX));
+    if (!this.vertDig) {
+      if (ratio > P.vertAimEnter) this.vertDig = true;
+    } else if (ratio < P.vertAimExit) {
+      this.vertDig = false;
+    }
+    if (!this.vertDig) {
       if (this.rampDir === 0) {
         if (ay > P.rampAimEnter) this.rampDir = this.facingY > 0 ? 1 : -1;
       } else if (ay < P.rampAimExit) {
@@ -431,11 +449,11 @@ export class Player {
     for (const idx of FAN_UP_IDX) fanAngles.push(upSign * idx);
     for (const idx of FAN_DOWN_IDX) fanAngles.push(-upSign * idx);
 
-    // In horizontal-dominant digs, solids in the digger's OWN column are the
+    // In passage (non-shaft) digs, solids in the digger's OWN column are the
     // floor/ceiling lip he's standing on — never a face. Anchoring one makes
     // a shift-0 window inside his own passage (all air → permanent whiff):
     // the r8 stall found by the stair test. Rays treat them as transparent.
-    const horizontal = Math.abs(this.facingY) <= Math.abs(this.facingX);
+    const horizontal = !this.vertDig;
     const ownCol = Math.floor(cx);
 
     let ax = -1;
@@ -472,8 +490,8 @@ export class Player {
       (isDiggable(tile) ? bites : clinks).push({ x: tx, y: ty, tile });
     };
 
-    if (Math.abs(this.facingY) > Math.abs(this.facingX)) {
-      // Vertical dig: body-wide band, faceBiteDepth rows into the face
+    if (this.vertDig) {
+      // Shaft dig: body-wide band, faceBiteDepth rows into the face
       const stepY = this.facingY >= 0 ? 1 : -1;
       for (let d = 0; d < P.faceBiteDepth; d++) {
         for (let o = -P.faceBiteSide; o <= P.faceBiteSide; o++) {
@@ -510,12 +528,18 @@ export class Player {
       //   order (a stranded head-height lip outside the fan's cone wedged
       //   the stair — r8 stall, caught by the headless stair test);
       // - biting deeper than the anchor spends the swing's surplus on cheap
-      //   materials instead of evaporating it (r9 — see faceBiteDepth).
+      //   materials instead of evaporating it (r9 — see faceBiteDepth);
+      // - in stair mode, columns BEYOND the anchor stagger by rampDir per
+      //   column (r9.2) so the mouthful is a slope-following parallelogram —
+      //   exactly what the ghost preview promises — instead of two aligned
+      //   columns whose corner catches the body on every diagonal step.
       const stepX = this.facingX >= 0 ? 1 : -1;
       const faceEnd = ax + stepX * (P.faceBiteDepth - 1);
-      for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) {
-        for (let c = ownCol + stepX; stepX > 0 ? c <= faceEnd : c >= faceEnd; c += stepX) {
-          bite(c, r);
+      for (let c = ownCol + stepX; stepX > 0 ? c <= faceEnd : c >= faceEnd; c += stepX) {
+        const beyond = Math.max(0, stepX > 0 ? c - ax : ax - c);
+        const stagger = this.rampDir * beyond;
+        for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) {
+          bite(c, r + stagger);
         }
       }
       // Ghost telegraph: where the NEXT two stair steps will carve if the
@@ -558,5 +582,6 @@ export class Player {
     this.fallDistance = 0;
     this.swingTick = -1;
     this.rampDir = 0;
+    this.vertDig = false;
   }
 }
