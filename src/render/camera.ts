@@ -9,6 +9,10 @@ export class Camera {
   x: number; // center, tile units
   y: number;
 
+  // Eased-in HARD floor for the underground surface-hide rule. null while
+  // the rule is inactive (on the surface / in a trench).
+  private surfaceClampY: number | null = null;
+
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
@@ -34,20 +38,26 @@ export class Camera {
     this.y += (ty - this.y) * k;
 
     // Surface rule: underground and outside a trench, the camera's top edge
-    // may reach the surface line but never show the sky/no-man's-land above.
-    // Approach the limit SMOOTHLY — a hard snap when stepping underground
-    // yanks the view down (playtest r5 feedback).
+    // must sit surfaceHideDepth BELOW the surface line — in a tunnel the
+    // surface simply doesn't exist on screen (confined-peripherals rule).
+    // The clamp value EASES in from wherever the camera was (a hard snap on
+    // stepping underground yanks the view — playtest r5), but once tracked
+    // it applies as a HARD floor each frame: the old ease-only version
+    // fought the follow smoothing to an equilibrium ~8 tiles short and
+    // quietly kept the surface on screen.
     const px = Math.floor(targetX);
     const py = Math.floor(targetY);
     const inTrench = world.inTrench(px, py) !== null;
     const surf = world.surfaceY[Math.max(0, Math.min(world.w - 1, px))];
     const onSurface = py <= surf;
     if (!inTrench && !onSurface) {
-      const minY = surf + halfH;
-      if (this.y < minY) {
-        const k2 = 1 - Math.exp(-5 * dtSec);
-        this.y += (minY - this.y) * k2;
-      }
+      const minY = surf + C.surfaceHideDepth + halfH;
+      const k2 = 1 - Math.exp(-5 * dtSec);
+      this.surfaceClampY =
+        this.surfaceClampY === null ? this.y : this.surfaceClampY + (minY - this.surfaceClampY) * k2;
+      if (this.y < this.surfaceClampY) this.y = this.surfaceClampY;
+    } else {
+      this.surfaceClampY = null;
     }
 
     // Map bounds

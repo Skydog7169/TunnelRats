@@ -329,13 +329,18 @@ export const CONFIG = {
 
   camera: {
     // CONFINED peripherals (2026-07-15 direction): the view is deliberately
-    // tight — ~30% tighter than the Phase-1 area. Not seeing where you're
-    // going IS the game: disorientation + sound are the navigation tools,
-    // and the headlamp beam (48 tiles) now reaches PAST the screen edge, so
-    // what you can see is screen-limited in the aim direction and
-    // darkness-limited everywhere else. Fog stays absolute (unlit = black).
-    viewTilesX: 84,
-    viewTilesY: 48,
+    // tight. Not seeing where you're going IS the game: disorientation +
+    // sound are the navigation tools. Fog stays absolute (unlit = black).
+    // INVARIANT: keep lamp ranges LONGER than viewTiles/2 — approaching
+    // light must splash on your walls before its carrier enters the screen
+    // (that's the combat forethought: you fight what you can reach, but you
+    // SEE trouble coming as light). Headlamp 48 > 72/2 = 36 ✓.
+    viewTilesX: 72,
+    viewTilesY: 40,
+    // Once underground (outside a trench/point), the view's top edge clamps
+    // this far BELOW the surface line — in a tunnel, the surface does not
+    // exist on screen at all (it used to ride exactly at the screen top).
+    surfaceHideDepth: 6,
     followSpeed: 8,     // 1/s exponential smoothing rate
     aimLead: 6,         // tiles of camera lead toward the cursor
   },
