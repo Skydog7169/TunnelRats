@@ -117,6 +117,7 @@ The carry-slot skeleton the armorer grows into — **data only, zero new behavio
 6. **Armorer economy** — how many slots (4 today), what earns one, is the armorer's stock finite per side (interesting for multiplayer later)?
 7. **Corpse economy** — corpse-running as tension (geophone-able noise) vs. chore; does lost gear regenerate at the armorer?
 8. **Crossing pacing** — Stage 5's gate encodes the target (3–4 min to first decision, punctuation every 60–90 s); worldgen v3's spacing/curtain knobs are the levers if playtests miss it.
+9. **Spoil / backfill** (raised by the 2026-07-15 playtest) — dug earth currently vanishes; real tunnellers drowned in their own spoil. A placeable-spoil system would let players backfill voids ("add dirt"), bridge their own cuts, and hide workings — and dumping spoil is noisy/visible (Phase 3/4 hooks). Big system (carry, placement, spoil economy); Phase 2's timbers-as-footing covers the traversal need for now. Revisit alongside the armorer economy.
 
 ## 8. Current controls
 

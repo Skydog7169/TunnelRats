@@ -52,6 +52,18 @@ an open gap without noticing it — the probe would have caught it in one sweep)
 *Design rationale:* pick-probing is the v1 stand-in for the Phase 3 geophone rhythm — stop,
 sense, then act. The tell narrows the search; the probe finishes it.
 
+### Recovery (getting back out of your own diggings)
+
+- **Stairs, not shafts.** Aim moderately up/down (the r8 stair mode — a faint ghost preview
+  shows the next two steps) and you carve a walkable ±1 staircase you can always retrace.
+  You can dig OUT of any hole this way: face a solid wall, aim up ~45°, and climb as you cut.
+- **You cannot bridge air.** Digging removes earth, never adds it; jump reach is ~2.5 tiles up
+  and ~5.5 across. Until Phase 2's placeable timbers land, don't cut a pit or shaft wider than
+  ~5 tiles unless you're prepared to stair-case down into it and back out the far side.
+- If you do get cornered: dig a fresh up-staircase through virgin earth — it always exists —
+  or take the death respawn (the world persists; only your position resets). Log any spot
+  where recovery took more than ~30 s in the results notes: that's r8 feedback.
+
 ## Seeds (from the validated 50-seed batch — spread across the pacing distribution)
 
 | # | URL | West-leg proxy estimate | Why it's in the panel |

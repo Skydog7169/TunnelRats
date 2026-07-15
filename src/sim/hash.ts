@@ -11,8 +11,9 @@
 //     health/death/respawn timer, the full LOADOUT (slots encoded via the
 //     append-only ITEM_ORDER index; carriedLamp is derived from it) + lamp
 //     power, swing state, impact and clink sequence counters,
-//     coyote/jump-buffer/fall-distance internals, and the full digProgress
-//     map (key-sorted so iteration order can't matter)
+//     coyote/jump-buffer/fall-distance internals, the full digProgress
+//     map (key-sorted so iteration order can't matter), and the r8 stair
+//     mode (rampDir — hysteresis state, persists across ticks)
 //   - world.regions (WorldRegions — DELIBERATE POLICY: this is static,
 //     seed-derived data, yet it IS hashed. Registering it makes the golden
 //     test sensitive to worldgen regressions — exactly the bug class Stage 4

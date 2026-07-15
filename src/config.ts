@@ -272,6 +272,13 @@ export const CONFIG = {
     anchorFanUpDeg: 75,  // anchor-fan spread above the aim (head lips sit steep)
     anchorFanDownDeg: 40, // spread below (enough for shin lips, misses the floor)
     faceBiteSide: 1,  // tiles each side of the contact (vertical digs)
+    // Stair mode (r8): a deliberately inclined aim carves exactly ONE step
+    // up/down per face (symmetric ±1 — the old slope×distance shift could cut
+    // 2–3-row pits on steep down-aims; playtest 2026-07-15). Hysteresis so
+    // the level↔stair mode can't flicker while digging near the threshold.
+    // These are aim-slope fractions (|facingY| with |facingY|<|facingX|).
+    rampAimEnter: 0.4, // enter stair mode above this
+    rampAimExit: 0.3,  // leave stair mode below this (only while still digging)
   },
 
   // --------------------------------------------------------------------------

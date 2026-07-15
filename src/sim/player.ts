@@ -56,9 +56,20 @@ export class Player {
   lastImpactTiles: { x: number; y: number; tile: Tile }[] = []; // tiles hit by the last blow
   clinkSeq = 0; // increments when a blow strikes something undiggable
   lastClinks: { x: number; y: number; tile: Tile }[] = []; // rock/water/timber struck
-  /** Where the NEXT blow will land — recomputed every digging tick for the HUD/renderer. */
-  digPreview: { bites: { x: number; y: number; tile: Tile }[]; clinks: { x: number; y: number; tile: Tile }[] } =
-    { bites: [], clinks: [] };
+  /**
+   * Stair mode (r8): 0 = level, -1 = staircase up, +1 = staircase down.
+   * Held with hysteresis while digging (rampAimEnter/rampAimExit) so the bite
+   * window can't flicker between modes near the threshold; resets on release.
+   * SIM STATE — registered in hashState.
+   */
+  rampDir: -1 | 0 | 1 = 0;
+  /** Where the NEXT blow will land — recomputed every digging tick for the HUD/renderer.
+   *  `ghost` telegraphs the next two stair steps (render hint only, fully derived). */
+  digPreview: {
+    bites: { x: number; y: number; tile: Tile }[];
+    clinks: { x: number; y: number; tile: Tile }[];
+    ghost: { x: number; y: number }[];
+  } = { bites: [], clinks: [], ghost: [] };
 
   private coyoteTicks = 0;
   private jumpBufferTicks = 0;
@@ -141,6 +152,7 @@ export class Player {
       h.u32(k);
       h.f64(this.digProgress.get(k)!);
     }
+    h.byte(this.rampDir + 1); // r8 stair mode (appended — append-only contract)
   }
 
   /** Standing inside the home (left) trench interior — the armorer's reach. */
@@ -332,11 +344,27 @@ export class Player {
   private updateDig(cmd: InputCommand): void {
     if (!cmd.dig) {
       this.swingTick = -1;
-      this.digPreview = { bites: [], clinks: [] };
+      this.rampDir = 0; // stair mode holds only while continuously digging
+      this.digPreview = { bites: [], clinks: [], ghost: [] };
       return;
     }
 
     const P = CONFIG.player;
+
+    // r8 stair-mode hysteresis: enter above rampAimEnter, leave below
+    // rampAimExit — near-threshold aim can no longer flicker the window
+    // between level and stair mid-dig. Sign follows the aim while engaged.
+    const ay = Math.abs(this.facingY);
+    if (ay <= Math.abs(this.facingX)) {
+      if (this.rampDir === 0) {
+        if (ay > P.rampAimEnter) this.rampDir = this.facingY > 0 ? 1 : -1;
+      } else if (ay < P.rampAimExit) {
+        this.rampDir = 0;
+      } else {
+        this.rampDir = this.facingY > 0 ? 1 : -1;
+      }
+    }
+
     const period = this.swingPeriodTicks;
     const impactTick = Math.round(period * P.swingImpactPoint);
     // Fresh swings start pre-wound so the first blow lands almost immediately
@@ -387,6 +415,7 @@ export class Player {
   private strikeWindow(): {
     bites: { x: number; y: number; tile: Tile }[];
     clinks: { x: number; y: number; tile: Tile }[];
+    ghost: { x: number; y: number }[];
   } {
     const P = CONFIG.player;
     const cx = this.centerX;
@@ -402,6 +431,13 @@ export class Player {
     for (const idx of FAN_UP_IDX) fanAngles.push(upSign * idx);
     for (const idx of FAN_DOWN_IDX) fanAngles.push(-upSign * idx);
 
+    // In horizontal-dominant digs, solids in the digger's OWN column are the
+    // floor/ceiling lip he's standing on — never a face. Anchoring one makes
+    // a shift-0 window inside his own passage (all air → permanent whiff):
+    // the r8 stall found by the stair test. Rays treat them as transparent.
+    const horizontal = Math.abs(this.facingY) <= Math.abs(this.facingX);
+    const ownCol = Math.floor(cx);
+
     let ax = -1;
     let ay = -1;
     let bestD = Infinity;
@@ -415,6 +451,7 @@ export class Player {
         if (i === lastIdx) continue;
         lastIdx = i;
         if (this.world.isSolid(tx, ty)) {
+          if (horizontal && tx === ownCol) continue; // own lip — keep marching
           if (d < bestD) {
             bestD = d;
             ax = tx;
@@ -424,10 +461,11 @@ export class Player {
         }
       }
     }
-    if (ax < 0) return { bites: [], clinks: [] }; // nothing in reach — whiff
+    if (ax < 0) return { bites: [], clinks: [], ghost: [] }; // nothing in reach — whiff
 
     const bites: { x: number; y: number; tile: Tile }[] = [];
     const clinks: { x: number; y: number; tile: Tile }[] = [];
+    const ghost: { x: number; y: number }[] = [];
     const bite = (tx: number, ty: number) => {
       if (!this.world.isSolid(tx, ty)) return; // ragged face — skip the gap
       const tile = this.world.getTile(tx, ty);
@@ -441,28 +479,54 @@ export class Player {
       // Horizontal-dominant dig: the player's own passage rows at the anchor
       // column. A LEVEL aim never shifts the window — the anchor only picks
       // the column, so wide fan rays that anchor the ceiling can't creep the
-      // tunnel upward. A deliberately INCLINED aim turns the window into a
-      // ramp: it slides down/up the aim's slope line and gains one extra
-      // headroom row so the finished incline is walkable in both directions
+      // tunnel upward. STAIR MODE (r8, held with hysteresis in rampDir):
+      // the window shifts exactly ONE row per face — up or down, symmetric —
+      // plus one headroom row so the finished incline is walkable both ways
       // (stepped tunnels wedge without it — same lesson as the sap decline).
+      // One is the cap in BOTH directions: bigger up-shifts bite columns out
+      // of walking order and strand faces beyond reach (r7 up-ramp trap);
+      // bigger down-shifts cut unjumpable pits (2026-07-15 playtest trap).
+      // 45° is the steepest stair a soldier can walk anyway — want steeper,
+      // aim vertical. The old slope×distance shift also made step depth vary
+      // with how far the anchor sat from the digger; a stair is now the SAME
+      // stair regardless of where the swing lands.
       const feetRow = Math.floor(this.y - EPS);
       const passTop = feetRow - (Math.ceil(this.height) - 1);
-      let shift = 0;
-      let headroom = 0;
-      if (Math.abs(this.facingY) > 0.35) {
-        const slope = this.facingY / Math.max(0.001, Math.abs(this.facingX));
-        const colDist = Math.abs(ax - Math.floor(cx));
-        shift = Math.round(slope * colDist);
-        // Ascending is capped at ONE row per swing: a bigger up-shift bites
-        // columns out of walking order and carves an overhang pocket whose
-        // remaining faces sit just beyond reach (r7 up-ramp trap). 45° is the
-        // steepest stair a soldier can walk anyway.
-        if (shift < -1) shift = -1;
-        headroom = 1;
+      // The step only engages when the anchor sits AHEAD of the digger's own
+      // column — never shift at colDist 0, or a down-aim digs the floor out
+      // from under your own feet and wedges you in a 1-wide pit (this guard
+      // lived implicitly in r7's slope×colDist product; keep it explicit).
+      const colDist = Math.abs(ax - Math.floor(cx));
+      const shift = colDist >= 1 ? this.rampDir : 0;
+      const headroom = shift !== 0 ? 1 : 0;
+      // Bite the window at EVERY column from just ahead of the digger to the
+      // anchor, not the anchor alone: a slow tile (root mat, clay) can outlive
+      // its window, and once the digger steps down/up past it the leftover
+      // lip sits outside the anchor fan's cone — stranded at head height,
+      // wedging the stair (r8 stall, caught by the headless stair test).
+      // Intermediate columns are almost always already air, so the swing's
+      // progress split barely changes; sweeping guarantees walking order.
+      const stepX = this.facingX >= 0 ? 1 : -1;
+      for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) {
+        for (let c = ownCol + stepX; stepX > 0 ? c <= ax : c >= ax; c += stepX) {
+          bite(c, r);
+        }
       }
-      for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) bite(ax, r);
+      // Ghost telegraph: where the NEXT two stair steps will carve if the
+      // digger keeps this aim. Render hint only — recomputed every tick,
+      // never hashed, light-gated by the renderer like the live window.
+      if (this.rampDir !== 0) {
+        const stepX = this.facingX >= 0 ? 1 : -1;
+        for (let s = 1; s <= 2; s++) {
+          for (let r = passTop + shift - headroom; r <= feetRow + shift; r++) {
+            const gx = ax + stepX * s;
+            const gy = r + this.rampDir * s;
+            if (this.world.inBounds(gx, gy)) ghost.push({ x: gx, y: gy });
+          }
+        }
+      }
     }
-    return { bites, clinks };
+    return { bites, clinks, ghost };
   }
 
   takeDamage(amount: number): void {
@@ -487,5 +551,6 @@ export class Player {
     this.vy = 0;
     this.fallDistance = 0;
     this.swingTick = -1;
+    this.rampDir = 0;
   }
 }

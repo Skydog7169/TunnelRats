@@ -445,6 +445,10 @@ export class Renderer {
     };
     draw(p.digPreview.bites, 'rgba(235, 228, 200, ', 0.5);
     draw(p.digPreview.clinks, 'rgba(200, 80, 60, ', 0.55);
+    // r8 ghost staircase: where the next two stair steps will carve — faint,
+    // and light-gated like everything else (darkness reveals nothing)
+    ctx.lineWidth = Math.max(1, ts * 0.06);
+    draw(p.digPreview.ghost, 'rgba(235, 228, 200, ', 0.18);
   }
 
   private updateAndDrawParticles(
