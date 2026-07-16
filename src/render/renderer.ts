@@ -203,6 +203,7 @@ export class Renderer {
       }
     }
 
+    this.drawPennants(ts); // deferred: the tile pass would overpaint them
     this.drawTrenchDressing(wsx, wsy, ts, x0, x1, y0, y1, fullbright);
     this.drawCraterDressing(wsx, wsy, ts, x0, x1, y0, y1, fullbright);
     this.drawDigCracks(wsx, wsy, ts, x0, x1, y0, y1, fullbright);
@@ -275,30 +276,31 @@ export class Renderer {
         }
       }
 
-      // Sandbag parapets stacked on the surface at both lips (2 columns wide)
-      for (const bagX of [t.x0 - 2, t.x0 - 1, t.x1 + 1, t.x1 + 2]) {
-        if (bagX < x0 || bagX > x1) continue;
-        const surf = world.surfaceY[Math.max(0, Math.min(world.w - 1, bagX))];
+      // Sandbag parapets stacked on the surface at both lips (2 columns wide).
+      // Bags are sized PHYSICALLY, like the soldier's proportions in
+      // drawPlayer: ~2 tiles long × 0.9 tall ≈ 50×23 cm at ~26 cm/tile —
+      // tile-multiple sizes silently shrink the props every tile-size halving.
+      for (const lipX of [t.x0 - 2, t.x1 + 1]) {
+        if (lipX + 1 < x0 || lipX > x1) continue;
+        const surf = world.surfaceY[Math.max(0, Math.min(world.w - 1, lipX))];
         const bagRow = surf - 1; // the air tile sitting on the ground
-        if (bagRow < y0 || bagRow > y1) continue;
-        const l = lightOf(bagX, bagRow);
+        if (bagRow < y0 - 3 || bagRow > y1 + 3) continue;
+        const l = lightOf(lipX, bagRow);
         if (l < CONFIG.light.minVisible) continue;
-        const sx = wsx(bagX);
-        const sy = wsy(bagRow);
+        const sx = wsx(lipX);
+        const groundSy = wsy(surf); // bags rest on top of the ground tile
         ctx.fillStyle = `rgba(138, 122, 88, ${l})`;
         ctx.strokeStyle = `rgba(60, 52, 36, ${l})`;
-        ctx.lineWidth = Math.max(1, ts * 0.04);
-        const bag = (bx: number, by: number, bw: number, bh: number) => {
+        ctx.lineWidth = Math.max(1, ts * 0.08);
+        const bag = (cx: number, cy: number) => {
           ctx.beginPath();
-          ctx.ellipse(sx + bx * ts, sy + by * ts, (bw * ts) / 2, (bh * ts) / 2, 0, 0, Math.PI * 2);
+          ctx.ellipse(sx + cx * ts, groundSy + cy * ts, ts, ts * 0.45, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         };
-        bag(0.25, 0.85, 0.5, 0.3);
-        bag(0.72, 0.85, 0.5, 0.3);
-        bag(0.32, 0.6, 0.5, 0.3);
-        bag(0.68, 0.58, 0.5, 0.3);
-        bag(0.5, 0.33, 0.55, 0.3);
+        bag(1.0, -0.45); // bottom course (pile is centered on the 2-column lip)
+        bag(1.15, -1.3); // second course, slight stagger
+        bag(0.9, -2.15); // top course — ≈2.6 tiles ≈ 70 cm of parapet
       }
     }
   }
@@ -319,25 +321,37 @@ export class Renderer {
     ctx.stroke();
   }
 
+  // Pennants extend ~3 tiles past their pole tile, so the column-by-column
+  // tile pass would overpaint them with sky — collected here and drawn after.
+  private pennants: { sx: number; sy: number; l: number }[] = [];
+
   private drawFlagPoleTile(sx: number, sy: number, ts: number, light: number, isTop: boolean): void {
     const { ctx } = this;
     const l = Math.min(1, light + 0.1);
     ctx.strokeStyle = `rgba(150, 148, 140, ${l})`;
-    ctx.lineWidth = Math.max(1.5, ts * 0.14);
+    ctx.lineWidth = Math.max(1.5, ts * 0.25); // ~7 cm pole at ~26 cm/tile
     ctx.beginPath();
     ctx.moveTo(sx + ts * 0.5, sy);
     ctx.lineTo(sx + ts * 0.5, sy + ts);
     ctx.stroke();
-    if (isTop) {
-      // Neutral pennant — ownership/capture visuals arrive with Phase 4
+    if (isTop) this.pennants.push({ sx, sy, l });
+  }
+
+  private drawPennants(ts: number): void {
+    const { ctx } = this;
+    for (const { sx, sy, l } of this.pennants) {
+      // Neutral pennant — ownership/capture visuals arrive with Phase 4.
+      // Physically sized (~3.2 × 1.6 tiles ≈ 80×40 cm) so it reads against
+      // the 6-tile exposed pole instead of vanishing at small tile sizes.
       ctx.fillStyle = `rgba(120, 118, 110, ${l})`;
       ctx.beginPath();
       ctx.moveTo(sx + ts * 0.5, sy);
-      ctx.lineTo(sx + ts * 2.1, sy + ts * 0.35);
-      ctx.lineTo(sx + ts * 0.5, sy + ts * 0.7);
+      ctx.lineTo(sx + ts * 3.7, sy + ts * 0.8);
+      ctx.lineTo(sx + ts * 0.5, sy + ts * 1.6);
       ctx.closePath();
       ctx.fill();
     }
+    this.pennants.length = 0;
   }
 
   /** Scattered sandbag clumps in the crater bowl — cover fragments, NOT a parapet. */
@@ -371,12 +385,15 @@ export class Renderer {
         ctx.fillStyle = `rgba(138, 122, 88, ${l})`;
         ctx.strokeStyle = `rgba(60, 52, 36, ${l})`;
         ctx.lineWidth = Math.max(1, ts * 0.04);
-        const nBags = 2 + Math.floor(hash2(43, p.id, k) * 2);
+        // 1–2 physically-sized bags per clump (~2 tiles long), tossed at a
+        // slight hash-jittered tilt — cover fragments, not built structure.
+        const nBags = 1 + Math.floor(hash2(43, p.id, k) * 2);
         for (let b = 0; b < nBags; b++) {
-          const bx = 0.25 + hash2(47, k, b) * 0.5;
-          const by = 0.85 - b * 0.26;
+          const bx = 0.5 + (hash2(47, k, b) - 0.5) * 1.2;
+          const by = 0.55 - b * 0.8;
+          const tilt = (hash2(53, k, b) - 0.5) * 0.5;
           ctx.beginPath();
-          ctx.ellipse(sx + bx * ts, sy + by * ts, ts * 0.28, ts * 0.15, 0, 0, Math.PI * 2);
+          ctx.ellipse(sx + bx * ts, sy + by * ts, ts, ts * 0.45, tilt, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
