@@ -51,7 +51,14 @@ export class Camera {
     const surf = world.surfaceY[Math.max(0, Math.min(world.w - 1, px))];
     const onSurface = py <= surf;
     if (!inTrench && !onSurface) {
-      const minY = surf + C.surfaceHideDepth + halfH;
+      // The player always outranks the surface-hide rule: never clamp so far
+      // down that fewer than keepAbovePlayer tiles above his center remain
+      // visible (shallow digs show a surface strip instead of a beheaded
+      // soldier; climbing out, the hole's lip stays in view).
+      const minY = Math.min(
+        surf + C.surfaceHideDepth + halfH,
+        targetY - C.keepAbovePlayer + halfH,
+      );
       const k2 = 1 - Math.exp(-5 * dtSec);
       this.surfaceClampY =
         this.surfaceClampY === null ? this.y : this.surfaceClampY + (minY - this.surfaceClampY) * k2;

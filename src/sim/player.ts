@@ -11,15 +11,23 @@ import { Loadout } from './loadout';
 import { isDiggable, Tile, TILE_DIG_TICKS } from './tiles';
 import { World } from './world';
 
-// Anchor-fan ray angles as table indices, precomputed from config once.
+// Anchor-fan ray angles as table indices, precomputed from config once and
+// ORDERED BY ANGULAR DISTANCE FROM THE AIM (r9.4): the strike anchors on the
+// face contact closest to the cursor line, widening outward only when nearer
+// angles whiff. The old rule (nearest solid BY DISTANCE across the whole fan)
+// could pick contacts up to 75° off the cursor — playtest: "my cursor is in
+// one direction and it chooses blocks far to the side". The wide fan itself
+// stays: it exists to find the head-height lip when pressed against a face
+// (r5), and angular ordering still reaches it — last instead of first.
 // Positive rotation is toward screen-down; the strike code flips sign by
 // facing so "up" stays up. (Deterministic: table trig only — see core/trig.)
-const FAN_UP_IDX = [0.2, 0.4, 0.6, 0.8, 1].map((f) =>
-  degToIdx(CONFIG.player.anchorFanUpDeg * f),
-);
-const FAN_DOWN_IDX = [0.33, 0.66, 1].map((f) =>
-  degToIdx(CONFIG.player.anchorFanDownDeg * f),
-);
+const FAN_ORDER: { idx: number; up: boolean }[] = [
+  { deg: 0, up: true },
+  ...[0.2, 0.4, 0.6, 0.8, 1].map((f) => ({ deg: CONFIG.player.anchorFanUpDeg * f, up: true })),
+  ...[0.33, 0.66, 1].map((f) => ({ deg: CONFIG.player.anchorFanDownDeg * f, up: false })),
+]
+  .sort((a, b) => a.deg - b.deg)
+  .map((s) => ({ idx: degToIdx(s.deg), up: s.up }));
 
 const DT = 1 / CONFIG.sim.tickRate;
 const EPS = 0.001;
@@ -445,9 +453,6 @@ export class Player {
     // flips with facing because screen y grows downward. Rays are the facing
     // vector rotated by fixed table angles — no transcendental Math in here.
     const upSign = this.facingX >= 0 ? -1 : 1;
-    const fanAngles = [0];
-    for (const idx of FAN_UP_IDX) fanAngles.push(upSign * idx);
-    for (const idx of FAN_DOWN_IDX) fanAngles.push(-upSign * idx);
 
     // In passage (non-shaft) digs, solids in the digger's OWN column are the
     // floor/ceiling lip he's standing on — never a face. Anchoring one makes
@@ -456,10 +461,12 @@ export class Player {
     const horizontal = !this.vertDig;
     const ownCol = Math.floor(cx);
 
+    // First hit in ANGULAR order wins — the anchor tracks the cursor line
+    // (see FAN_ORDER note above).
     let ax = -1;
     let ay = -1;
-    let bestD = Infinity;
-    for (const t of fanAngles) {
+    for (const f of FAN_ORDER) {
+      const t = f.up ? upSign * f.idx : -upSign * f.idx;
       const [rdx, rdy] = rotateIdx(this.facingX, this.facingY, t);
       let lastIdx = -1;
       for (let d = 0.15; d <= P.digReach; d += 0.15) {
@@ -470,14 +477,12 @@ export class Player {
         lastIdx = i;
         if (this.world.isSolid(tx, ty)) {
           if (horizontal && tx === ownCol) continue; // own lip — keep marching
-          if (d < bestD) {
-            bestD = d;
-            ax = tx;
-            ay = ty;
-          }
+          ax = tx;
+          ay = ty;
           break;
         }
       }
+      if (ax >= 0) break;
     }
     if (ax < 0) return { bites: [], clinks: [], ghost: [] }; // nothing in reach — whiff
 

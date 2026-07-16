@@ -341,6 +341,13 @@ export const CONFIG = {
     // this far BELOW the surface line — in a tunnel, the surface does not
     // exist on screen at all (it used to ride exactly at the screen top).
     surfaceHideDepth: 6,
+    // …but the clamp YIELDS before it cuts the soldier off: at least this
+    // many tiles above the player's CENTER stay visible (≈6 above his head),
+    // so near the surface you always see yourself and the lip you're
+    // climbing for. Shallow depths trade a visible surface strip for a
+    // visible soldier — the soldier wins (playtest: "couldn't get out of
+    // the hole because I couldn't see where I was at the top").
+    keepAbovePlayer: 10,
     followSpeed: 8,     // 1/s exponential smoothing rate
     aimLead: 6,         // tiles of camera lead toward the cursor
   },
