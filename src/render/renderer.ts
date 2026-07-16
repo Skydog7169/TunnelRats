@@ -573,6 +573,7 @@ export class Renderer {
     const BELT = '#4a3b26';
     const STRAP = '#6b5d3e';
     const PACK = '#6f6647';
+    const KHAKI_FAR = '#6e6444'; // far-side limbs: darker for depth
 
     // Walk/climb cycle driven by actual displacement so feet never slide.
     // Cadence: 0.8 phase per tile — r9 halved the tiles and silently DOUBLED
@@ -606,6 +607,14 @@ export class Renderer {
     const headY = shoulderY - headR - ts * 0.05;
     const hipX = sx;
     const shoulderX = sx + lean;
+    // The arms hang from DIFFERENT shoulders (they used to share one pin):
+    // in profile the far shoulder sits slightly behind the facing direction
+    // and a touch lower; the near one slightly ahead. The far arm is drawn
+    // BEFORE the torso so the body occludes its joint.
+    const farShX = shoulderX - side * ts * 0.09;
+    const farShY = shoulderY + ts * 0.1;
+    const nearShX = shoulderX + side * ts * 0.05;
+    const nearShY = shoulderY + ts * 0.05;
 
     // --- Legs ---------------------------------------------------------------
     let f1x: number, f1y: number, f2x: number, f2y: number;
@@ -657,6 +666,32 @@ export class Renderer {
     drawLeg(f1x, f1y);
     drawLeg(f2x, f2y);
 
+    // --- Far (free) arm — drawn first so the torso covers its shoulder ----------
+    let fhX: number, fhY: number;
+    if (p.onLadder) {
+      fhX = farShX - side * ts * 0.08;
+      fhY = farShY - ts * 0.5 + Math.sin(ph + Math.PI) * ts * 0.1; // reaching up the rungs
+    } else if (moving && p.grounded) {
+      fhX = farShX + Math.sin(ph + Math.PI) * ts * 0.26;
+      fhY = farShY + ts * 0.34;
+    } else if (!p.grounded) {
+      fhX = farShX - side * ts * 0.28;
+      fhY = farShY + ts * 0.06; // flung out for balance
+    } else {
+      fhX = farShX - side * ts * 0.1;
+      fhY = farShY + ts * 0.38;
+    }
+    ctx.strokeStyle = KHAKI_FAR;
+    ctx.lineWidth = Math.max(1.5, ts * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(farShX, farShY);
+    ctx.lineTo(fhX, fhY);
+    ctx.stroke();
+    ctx.fillStyle = SKIN; // bare hand
+    ctx.beginPath();
+    ctx.arc(fhX, fhY, ts * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
     // --- Torso: pack behind, filled tunic, belt, chest webbing ------------------
     ctx.fillStyle = PACK;
     const packCx = shoulderX - side * ts * 0.22;
@@ -687,33 +722,7 @@ export class Renderer {
     ctx.lineTo(hipX + ts * 0.14, hipY - ts * 0.05);
     ctx.stroke();
 
-    // --- Free arm ---------------------------------------------------------------
-    let fhX: number, fhY: number;
-    if (p.onLadder) {
-      fhX = shoulderX - side * ts * 0.08;
-      fhY = shoulderY - ts * 0.4 + Math.sin(ph + Math.PI) * ts * 0.1; // reaching up the rungs
-    } else if (moving && p.grounded) {
-      fhX = shoulderX + Math.sin(ph + Math.PI) * ts * 0.26;
-      fhY = shoulderY + ts * 0.38;
-    } else if (!p.grounded) {
-      fhX = shoulderX - side * ts * 0.28;
-      fhY = shoulderY + ts * 0.1; // flung out for balance
-    } else {
-      fhX = shoulderX - side * ts * 0.1;
-      fhY = shoulderY + ts * 0.42;
-    }
-    ctx.strokeStyle = KHAKI;
-    ctx.lineWidth = Math.max(1.5, ts * 0.09);
-    ctx.beginPath();
-    ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
-    ctx.lineTo(fhX, fhY);
-    ctx.stroke();
-    ctx.fillStyle = SKIN; // bare hand
-    ctx.beginPath();
-    ctx.arc(fhX, fhY, ts * 0.05, 0, Math.PI * 2);
-    ctx.fill();
-
-    // --- Pick arm + tool (only when the pick is actually IN HAND — the
+    // --- Near (pick) arm + tool (only when the pick is actually IN HAND — the
     // active slot decides; keys 1-4) -------------------------------------------
     if (p.activeItem === 'pick') {
       const period = p.swingPeriodTicks;
@@ -734,12 +743,12 @@ export class Renderer {
       }
       const armLen = ts * 0.42;
       const toolLen = ts * 0.8;
-      const handX = shoulderX + Math.cos(toolAng) * armLen;
-      const handY = shoulderY + ts * 0.1 + Math.sin(toolAng) * armLen;
+      const handX = nearShX + Math.cos(toolAng) * armLen;
+      const handY = nearShY + ts * 0.05 + Math.sin(toolAng) * armLen;
 
       ctx.strokeStyle = KHAKI;
       ctx.beginPath();
-      ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
+      ctx.moveTo(nearShX, nearShY);
       ctx.lineTo(handX, handY);
       ctx.stroke();
       ctx.fillStyle = SKIN;
@@ -767,16 +776,16 @@ export class Renderer {
       // opposite the free arm while marching, hangs at the side otherwise.
       let h2x: number, h2y: number;
       if (moving && p.grounded) {
-        h2x = shoulderX + Math.sin(ph) * ts * 0.26;
-        h2y = shoulderY + ts * 0.38;
+        h2x = nearShX + Math.sin(ph) * ts * 0.26;
+        h2y = nearShY + ts * 0.34;
       } else {
-        h2x = shoulderX + side * ts * 0.12;
-        h2y = shoulderY + ts * 0.42;
+        h2x = nearShX + side * ts * 0.12;
+        h2y = nearShY + ts * 0.38;
       }
       ctx.strokeStyle = KHAKI;
       ctx.lineWidth = Math.max(1.5, ts * 0.09);
       ctx.beginPath();
-      ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
+      ctx.moveTo(nearShX, nearShY);
       ctx.lineTo(h2x, h2y);
       ctx.stroke();
       ctx.fillStyle = SKIN;
