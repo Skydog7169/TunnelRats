@@ -30,6 +30,7 @@ export interface GoldenResult {
     dugTiles: number; // pick impacts that connected
     everCrouched: boolean;
     lampSwapped: boolean;
+    slotSelected: boolean; // cycled the active loadout slot (dig gating exercised)
     enteredSap: boolean; // walked into the home trench's pre-dug sap gallery
     materialsDug: string[]; // distinct materials the pick actually removed
   };
@@ -59,6 +60,10 @@ export function buildScript(): InputCommand[] {
   push(1, { swapLamp: true }); // armorer swap (in home trench)
   push(1, { toggleLamp: true }); // lamp off
   push(1, { toggleLamp: true }); // lamp on
+  // stow the pick (slot 2 = lamp), try to dig — MUST whiff (gating), re-arm
+  push(1, { selectSlot: 1 });
+  push(20, { dig: true, ...AIM_LEVEL });
+  push(1, { selectSlot: 0 });
   // to the ladder (≈9 tiles right of spawn) and climb to the surface
   push(27, { moveX: 1, ...AIM_LEVEL });
   push(100, { jumpHeld: true, ...AIM_UP }); // W = climb while overlapping the ladder
@@ -98,6 +103,7 @@ function runOnce(): { sim: Sim; coverage: GoldenResult['coverage'] } {
     dugTiles: 0,
     everCrouched: false,
     lampSwapped: false,
+    slotSelected: false,
     enteredSap: false,
     materialsDug: [],
   };
@@ -113,6 +119,7 @@ function runOnce(): { sim: Sim; coverage: GoldenResult['coverage'] } {
     if (!p.grounded && !p.onLadder) coverage.jumped = true;
     if (p.onLadder) coverage.climbedLadder = true;
     if (p.crouching) coverage.everCrouched = true;
+    if (p.activeSlot !== 0) coverage.slotSelected = true;
     if (p.impactSeq !== lastImpact) {
       lastImpact = p.impactSeq;
       for (const hit of p.lastImpactTiles) materials.add(TILE_NAME[hit.tile]);

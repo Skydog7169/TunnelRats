@@ -9,6 +9,7 @@ export class InputManager {
   private jumpLatch = false;
   private toggleLampLatch = false;
   private swapLampLatch = false;
+  private selectSlotLatch = -1; // 1-4 keys → loadout slot 0-3 (edge)
   private mouseDown = false;
 
   mouseSx = 0; // raw screen px, used by renderer for aim/camera lead
@@ -37,6 +38,12 @@ export class InputManager {
           break;
         case 'KeyG':
           this.swapLampLatch = true;
+          break;
+        case 'Digit1':
+        case 'Digit2':
+        case 'Digit3':
+        case 'Digit4':
+          this.selectSlotLatch = Number(e.code.slice(-1)) - 1;
           break;
         case 'Backquote':
           this.onToggleOverlay?.();
@@ -88,10 +95,12 @@ export class InputManager {
     cmd.aimY = aimWorld.y;
     cmd.toggleLamp = this.toggleLampLatch;
     cmd.swapLamp = this.swapLampLatch;
+    cmd.selectSlot = this.selectSlotLatch;
 
     this.jumpLatch = false;
     this.toggleLampLatch = false;
     this.swapLampLatch = false;
+    this.selectSlotLatch = -1;
     return cmd;
   }
 }

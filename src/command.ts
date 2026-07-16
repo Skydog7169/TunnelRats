@@ -12,6 +12,7 @@ export interface InputCommand {
   aimY: number;
   toggleLamp: boolean; // edge: switch carried lamp on/off
   swapLamp: boolean;   // edge: swap head<->hip lamp (only works at own trench)
+  selectSlot: number;  // edge: -1 = none, 0..3 = make this loadout slot active
 }
 
 export function emptyCommand(): InputCommand {
@@ -25,5 +26,6 @@ export function emptyCommand(): InputCommand {
     aimY: 0,
     toggleLamp: false,
     swapLamp: false,
+    selectSlot: -1,
   };
 }

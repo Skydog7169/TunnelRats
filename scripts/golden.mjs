@@ -80,7 +80,7 @@ try {
   const covOk =
     cov.walked && cov.jumped && cov.climbedLadder && cov.dugTiles > 20 &&
     cov.everCrouched && cov.lampSwapped &&
-    cov.enteredSap && cov.materialsDug.length >= 2; // Stage-4 additions
+    cov.enteredSap && cov.materialsDug.length >= 2 && cov.slotSelected;
   if (!res.repeatOk) {
     console.error('FAIL: two in-process runs disagreed — nondeterminism inside the sim!');
     exitCode = 1;

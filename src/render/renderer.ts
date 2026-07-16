@@ -4,6 +4,7 @@
 // particles) is render-side only — the sim knows nothing about it.
 
 import { CONFIG } from '../config';
+import { ITEMS } from '../sim/items';
 import { Sim } from '../sim/sim';
 import { Tile, TILE_DIG_TICKS } from '../sim/tiles';
 import { hash2 } from '../core/prng';
@@ -556,22 +557,31 @@ export class Renderer {
     const STRAP = '#6b5d3e';
     const PACK = '#6f6647';
 
-    // Walk/climb cycle driven by actual displacement so feet never slide
+    // Walk/climb cycle driven by actual displacement so feet never slide.
+    // Cadence: 0.8 phase per tile — r9 halved the tiles and silently DOUBLED
+    // the leg rate ("looks like the soldier is sprinting"); 1.0 restores the
+    // 8px look, 0.8 goes ~20% longer-strided past it: a deliberate, loaded-
+    // down trudge, not a jog. Movement SPEED is untouched (locked).
     const ddx = pcx - this.lastDrawX;
     const ddy = pcy - this.lastDrawY;
     this.lastDrawX = pcx;
     this.lastDrawY = pcy;
     if (Math.abs(ddx) < 2 && Math.abs(ddy) < 2) {
-      this.walkCycle += p.onLadder ? ddy * 2 : ddx * 2; // ddx is in (small) tiles
+      this.walkCycle += (p.onLadder ? ddy : ddx) * 0.8;
     }
     const ph = this.walkCycle;
-    const moving = Math.abs(p.vx) > 0.4 || (p.onLadder && Math.abs(p.vy) > 0.4);
+    const moving = Math.abs(p.vx) > 0.8 || (p.onLadder && Math.abs(p.vy) > 0.8);
 
     ctx.lineCap = 'round';
 
-    // Skeleton anchor points (crouch lean pushes the upper body toward aim)
-    const lean = p.crouching ? side * ts * 0.26 : 0;
-    const bob = moving && p.grounded ? Math.abs(Math.sin(ph)) * ts * 0.05 : 0;
+    // Skeleton anchor points. Crouch lean pushes the upper body toward the
+    // aim; a slighter WALKING lean puts his weight into the march.
+    const lean = p.crouching
+      ? side * ts * 0.26
+      : moving && p.grounded
+        ? side * ts * 0.07
+        : 0;
+    const bob = moving && p.grounded ? Math.abs(Math.sin(ph)) * ts * 0.06 : 0;
     const footY = sy + h / 2;
     const hipY = sy + h * 0.18 - bob;
     const shoulderY = sy - h / 2 + headR * 2 + ts * 0.12 - bob;
@@ -594,9 +604,10 @@ export class Renderer {
       f1x = -side * ts * 0.3; f1y = 0;
       f2x = side * ts * 0.4;  f2y = 0;
     } else if (moving) {
-      const stride = p.crouching ? 0.18 : 0.3; // low shuffle while kneeling
-      f1x = Math.sin(ph) * ts * stride;  f1y = -Math.max(0, Math.cos(ph)) * ts * 0.14;
-      f2x = -Math.sin(ph) * ts * stride; f2y = -Math.max(0, -Math.cos(ph)) * ts * 0.14;
+      // Longer, lower steps (deliberate trudge — pairs with the 0.8 cadence)
+      const stride = p.crouching ? 0.2 : 0.34; // low shuffle while kneeling
+      f1x = Math.sin(ph) * ts * stride;  f1y = -Math.max(0, Math.cos(ph)) * ts * 0.11;
+      f2x = -Math.sin(ph) * ts * stride; f2y = -Math.max(0, -Math.cos(ph)) * ts * 0.11;
     } else {
       f1x = -ts * 0.16; f1y = 0;
       f2x = ts * 0.16;  f2y = 0;
@@ -685,53 +696,77 @@ export class Renderer {
     ctx.arc(fhX, fhY, ts * 0.05, 0, Math.PI * 2);
     ctx.fill();
 
-    // --- Pick arm + tool ----------------------------------------------------------
-    const period = p.swingPeriodTicks;
-    const phase = p.swingTick < 0 ? -1 : Math.min(0.999, (p.swingTick + alpha) / period);
-    const baseAng = Math.atan2(p.facingY, p.facingX);
-    let toolAng: number;
-    if (phase < 0) {
-      toolAng = side >= 0 ? 1.9 : 1.25; // resting: haft hangs at the side
-    } else {
-      const ip = CONFIG.player.swingImpactPoint;
-      if (phase < ip) {
-        const t = phase / ip;
-        toolAng = baseAng - side * 1.7 + t * t * (side * 2.05); // windup → strike
+    // --- Pick arm + tool (only when the pick is actually IN HAND — the
+    // active slot decides; keys 1-4) -------------------------------------------
+    if (p.activeItem === 'pick') {
+      const period = p.swingPeriodTicks;
+      const phase = p.swingTick < 0 ? -1 : Math.min(0.999, (p.swingTick + alpha) / period);
+      const baseAng = Math.atan2(p.facingY, p.facingX);
+      let toolAng: number;
+      if (phase < 0) {
+        toolAng = side >= 0 ? 1.9 : 1.25; // resting: haft hangs at the side
       } else {
-        const t = (phase - ip) / (1 - ip);
-        toolAng = baseAng + side * 0.35 - t * side * 0.55; // recoil back
+        const ip = CONFIG.player.swingImpactPoint;
+        if (phase < ip) {
+          const t = phase / ip;
+          toolAng = baseAng - side * 1.7 + t * t * (side * 2.05); // windup → strike
+        } else {
+          const t = (phase - ip) / (1 - ip);
+          toolAng = baseAng + side * 0.35 - t * side * 0.55; // recoil back
+        }
       }
+      const armLen = ts * 0.42;
+      const toolLen = ts * 0.8;
+      const handX = shoulderX + Math.cos(toolAng) * armLen;
+      const handY = shoulderY + ts * 0.1 + Math.sin(toolAng) * armLen;
+
+      ctx.strokeStyle = KHAKI;
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
+      ctx.lineTo(handX, handY);
+      ctx.stroke();
+      ctx.fillStyle = SKIN;
+      ctx.beginPath();
+      ctx.arc(handX, handY, ts * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+
+      const tipX = handX + Math.cos(toolAng) * toolLen;
+      const tipY = handY + Math.sin(toolAng) * toolLen;
+      ctx.strokeStyle = '#8a6a3c';
+      ctx.lineWidth = Math.max(1.5, ts * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      const perp = toolAng + Math.PI / 2;
+      ctx.strokeStyle = '#9aa0a8';
+      ctx.lineWidth = Math.max(2, ts * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(tipX - Math.cos(perp) * ts * 0.28, tipY - Math.sin(perp) * ts * 0.28);
+      ctx.lineTo(tipX + Math.cos(perp) * ts * 0.28, tipY + Math.sin(perp) * ts * 0.28);
+      ctx.stroke();
+    } else {
+      // Empty hands (or a not-yet-implemented item): second arm swings
+      // opposite the free arm while marching, hangs at the side otherwise.
+      let h2x: number, h2y: number;
+      if (moving && p.grounded) {
+        h2x = shoulderX + Math.sin(ph) * ts * 0.26;
+        h2y = shoulderY + ts * 0.38;
+      } else {
+        h2x = shoulderX + side * ts * 0.12;
+        h2y = shoulderY + ts * 0.42;
+      }
+      ctx.strokeStyle = KHAKI;
+      ctx.lineWidth = Math.max(1.5, ts * 0.09);
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
+      ctx.lineTo(h2x, h2y);
+      ctx.stroke();
+      ctx.fillStyle = SKIN;
+      ctx.beginPath();
+      ctx.arc(h2x, h2y, ts * 0.05, 0, Math.PI * 2);
+      ctx.fill();
     }
-    const armLen = ts * 0.42;
-    const toolLen = ts * 0.8;
-    const handX = shoulderX + Math.cos(toolAng) * armLen;
-    const handY = shoulderY + ts * 0.1 + Math.sin(toolAng) * armLen;
-
-    ctx.strokeStyle = KHAKI;
-    ctx.beginPath();
-    ctx.moveTo(shoulderX, shoulderY + ts * 0.06);
-    ctx.lineTo(handX, handY);
-    ctx.stroke();
-    ctx.fillStyle = SKIN;
-    ctx.beginPath();
-    ctx.arc(handX, handY, ts * 0.05, 0, Math.PI * 2);
-    ctx.fill();
-
-    const tipX = handX + Math.cos(toolAng) * toolLen;
-    const tipY = handY + Math.sin(toolAng) * toolLen;
-    ctx.strokeStyle = '#8a6a3c';
-    ctx.lineWidth = Math.max(1.5, ts * 0.08);
-    ctx.beginPath();
-    ctx.moveTo(handX, handY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    const perp = toolAng + Math.PI / 2;
-    ctx.strokeStyle = '#9aa0a8';
-    ctx.lineWidth = Math.max(2, ts * 0.1);
-    ctx.beginPath();
-    ctx.moveTo(tipX - Math.cos(perp) * ts * 0.28, tipY - Math.sin(perp) * ts * 0.28);
-    ctx.lineTo(tipX + Math.cos(perp) * ts * 0.28, tipY + Math.sin(perp) * ts * 0.28);
-    ctx.stroke();
 
     // --- Head + helmet: the HEAD aims; the lamp is bolted to the helmet ------------
     // Pitch = up/down tilt of the face in the facing direction's frame.
@@ -947,6 +982,33 @@ export class Renderer {
   private drawHud(): void {
     const { ctx } = this;
     const p = this.sim.player;
+
+    // Hotbar: the 4 carry slots, keys 1-4. What's in your HANDS matters —
+    // digging needs the pick held (armorer economy, brick one).
+    const slotW = 92;
+    const slotH = 26;
+    const hbY = this.canvas.height - slotH - 10;
+    ctx.font = '12px monospace';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < p.loadout.slots.length; i++) {
+      const x = 12 + i * (slotW + 6);
+      const active = i === p.activeSlot;
+      ctx.fillStyle = active ? 'rgba(60, 58, 44, 0.9)' : 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(x, hbY, slotW, slotH);
+      ctx.strokeStyle = active ? '#e8dfa8' : '#5a564c';
+      ctx.lineWidth = active ? 2 : 1;
+      ctx.strokeRect(x, hbY, slotW, slotH);
+      ctx.fillStyle = '#8a8578';
+      ctx.fillText(String(i + 1), x + 6, hbY + slotH / 2);
+      const slot = p.loadout.slots[i];
+      ctx.fillStyle = active ? '#e8dfa8' : '#a49e8c';
+      const label = slot
+        ? ITEMS[slot.item].name + (slot.count > 1 ? ` ×${slot.count}` : '')
+        : '—';
+      ctx.fillText(label.slice(0, 11), x + 18, hbY + slotH / 2);
+    }
+    ctx.textBaseline = 'top';
+
     ctx.font = '14px monospace';
     ctx.textBaseline = 'top';
     ctx.fillStyle = p.health < 35 ? '#ff6a5e' : '#cfc9b8';

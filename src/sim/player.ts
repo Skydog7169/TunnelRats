@@ -7,6 +7,7 @@ import { InputCommand } from '../command';
 import { CONFIG } from '../config';
 import { degToIdx, len2, rotateIdx } from '../core/trig';
 import { StateHasher } from './hash';
+import { ItemId } from './items';
 import { Loadout } from './loadout';
 import { isDiggable, Tile, TILE_DIG_TICKS } from './tiles';
 import { World } from './world';
@@ -56,6 +57,13 @@ export class Player {
   // exactly one lamp item carried; swap only at the home trench (armorer).
   loadout = new Loadout();
   lampOn = true; // power state of whichever lamp is carried
+  /**
+   * ACTIVE slot (keys 1–4): what the soldier holds in his hands. Digging
+   * requires the pick in hand — the first brick of the armorer economy
+   * (holding a weapon later means NOT holding the pick). Lamps are worn, not
+   * held (F stays independent). SIM STATE — registered in hashState.
+   */
+  activeSlot = 0; // spawn loadout puts the pick in slot 0
 
   // Digging (pick swings)
   digProgress = new Map<number, number>(); // tile index -> accumulated ticks
@@ -105,6 +113,11 @@ export class Player {
   /** Which lamp is carried — derived from the loadout (migrated in Stage 3). */
   get carriedLamp(): LampKind {
     return this.loadout.has('lamp_hip') ? 'hip' : 'head';
+  }
+
+  /** What's in the soldier's hands right now (null = empty slot selected). */
+  get activeItem(): ItemId | null {
+    return this.loadout.slots[this.activeSlot]?.item ?? null;
   }
 
   get width(): number {
@@ -169,6 +182,7 @@ export class Player {
     }
     h.byte(this.rampDir + 1); // r8 stair mode (appended — append-only contract)
     h.bool(this.vertDig); // r9.2 shaft mode (appended — append-only contract)
+    h.byte(this.activeSlot); // active-slot selection (appended — append-only contract)
   }
 
   /** Standing inside the home (left) trench interior — the armorer's reach. */
@@ -199,6 +213,9 @@ export class Player {
       this.facingY = ay / alen;
     }
 
+    if (cmd.selectSlot >= 0 && cmd.selectSlot < this.loadout.slots.length) {
+      this.activeSlot = cmd.selectSlot;
+    }
     if (cmd.toggleLamp) this.lampOn = !this.lampOn;
     if (cmd.swapLamp && this.inHomeTrench()) {
       if (this.loadout.has('lamp_head')) this.loadout.swapItem('lamp_head', 'lamp_hip');
@@ -358,7 +375,7 @@ export class Player {
    * loosens both at half rate each — same material moved, more organic hole.
    */
   private updateDig(cmd: InputCommand): void {
-    if (!cmd.dig) {
+    if (!cmd.dig || this.activeItem !== 'pick') {
       this.swingTick = -1;
       this.rampDir = 0; // mode state holds only while continuously digging
       this.vertDig = false;
