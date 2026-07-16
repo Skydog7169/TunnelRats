@@ -11,7 +11,7 @@
 // Recorded lesson (do not relearn): generation carves tunnels as EXPLICIT
 // tile regions (carveRun / carveShaft), never by simulating pick swings.
 
-import { CONFIG } from '../config';
+import { CONFIG, MAX_FEATURELESS_SPAN_TILES } from '../config';
 import { fbm2, noise1 } from '../core/noise';
 import { hash2, PRNG } from '../core/prng';
 import {
@@ -68,6 +68,7 @@ export function generateWorld(world: World, seed: number): GenResult {
   const rngCrater = root.fork(14);
   const rngNetwork = root.fork(15);
   const rngWorkings = root.fork(16);
+  const rngPunctuate = root.fork(17);
 
   const layout = layoutPointChain(world.w, rngPoints);
 
@@ -109,6 +110,9 @@ export function generateWorld(world: World, seed: number): GenResult {
 
   // --- Abandoned workings (after everything with air, so isolation scans see it)
   const workings = carveWorkings(world, rngWorkings, layout, curtains);
+
+  // --- Punctuation deficit pass (r10 — after ALL features exist) -------------
+  punctuateFeaturelessSpans(world, rngPunctuate, seed, points);
 
   // --- Stability field + light (Stage A: live roof scores, not just the
   // material mirror — see stability.ts) ---------------------------------------
@@ -280,7 +284,7 @@ function stampBlobs(
   layout: Layout,
 ): void {
   const G = CONFIG.gen;
-  const { w, h } = world;
+  const { w } = world;
 
   for (let n = 0; n < spec.count; n++) {
     const rx = rng.range(spec.rMin, spec.rMax);
@@ -298,23 +302,105 @@ function stampBlobs(
     }
     if (cx < 0) continue; // no clear spot found — drop this blob
     const cy = rng.range(spec.yMin, spec.yMax);
+    stampOneBlob(world, noiseSeed, tile, cx, cy, rx, ry);
+  }
+}
 
-    const x0 = Math.max(0, Math.floor(cx - rx * 1.6));
-    const x1 = Math.min(w - 1, Math.ceil(cx + rx * 1.6));
-    const y0 = Math.max(0, Math.floor(cy - ry * 1.6));
-    const y1 = Math.min(h - 1, Math.ceil(cy + ry * 1.6));
+/** One noise-edged ellipse of `tile`. Never fills air; respects bedrock. */
+function stampOneBlob(
+  world: World,
+  noiseSeed: number,
+  tile: Tile,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): void {
+  const G = CONFIG.gen;
+  const { w, h } = world;
+  const x0 = Math.max(0, Math.floor(cx - rx * 1.6));
+  const x1 = Math.min(w - 1, Math.ceil(cx + rx * 1.6));
+  const y0 = Math.max(0, Math.floor(cy - ry * 1.6));
+  const y1 = Math.min(h - 1, Math.ceil(cy + ry * 1.6));
 
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const cur = world.tiles[y * w + x];
-        if (cur === Tile.Air || cur === Tile.Rock) continue; // never fill air; respect bedrock
-        const dx = (x - cx) / rx;
-        const dy = (y - cy) / ry;
-        const edge = 1 + (fbm2(noiseSeed, x * 0.0375, y * 0.0375, 2) - 0.5) * 2 * G.blobEdgeNoise;
-        if (dx * dx + dy * dy <= edge) {
-          world.tiles[y * w + x] = tile;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const cur = world.tiles[y * w + x];
+      if (cur === Tile.Air || cur === Tile.Rock) continue; // never fill air; respect bedrock
+      const dx = (x - cx) / rx;
+      const dy = (y - cy) / ry;
+      const edge = 1 + (fbm2(noiseSeed, x * 0.0375, y * 0.0375, 2) - 0.5) * 2 * G.blobEdgeNoise;
+      if (dx * dx + dy * dy <= edge) {
+        world.tiles[y * w + x] = tile;
+      }
+    }
+  }
+}
+
+/**
+ * Punctuation deficit pass (r10). The featureless-span cap
+ * (MAX_FEATURELESS_SPAN_TILES, derived in config from dig rates × the
+ * punctuation ceiling) is a GENERATIVE contract, not a validator hope: after
+ * every feature exists, any feature-free corridor run still longer than the
+ * cap gets a small sand pocket injected near its midpoint. Random pocket
+ * density stopped guaranteeing this once r10 stretched the intervals to ~500
+ * tiles — the edge intervals (no workings there) failed the batch 7/50.
+ *
+ * ⚠ Mirrors featurelessSpan() in worldgenRun.ts EXACTLY (corridor x-range,
+ * row band, "clean = only topsoil/root mat"). Change one → change both.
+ * Runs AFTER workings/network (they add features, and injected sand never
+ * fills air) and never touches rock, so curtains and gap windows are safe —
+ * a featureless run contains no rock by definition, so its midpoint is
+ * always off-curtain.
+ */
+function punctuateFeaturelessSpans(
+  world: World,
+  rng: PRNG,
+  seed: number,
+  points: CapturePointRegion[],
+): void {
+  const cap = MAX_FEATURELESS_SPAN_TILES - 24; // margin under the validator cap
+  for (let i = 0; i < 4; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const floorA = a.floor.y1 + 1;
+    const floorB = b.floor.y1 + 1;
+    const yTop = Math.min(floorA, floorB) - Math.ceil(CONFIG.player.height);
+    const yBot = Math.max(floorA, floorB) + 16;
+    const isClean = (x: number): boolean => {
+      const y0 = Math.max(yTop, world.groundY[x] + 4);
+      for (let y = y0; y <= yBot; y++) {
+        const t = world.getTile(x, y);
+        if (t !== Tile.Topsoil && t !== Tile.RootMat) return false;
+      }
+      return true;
+    };
+    // Each injection breaks the longest remaining run near its middle; the
+    // guard bound is generous (a 560-tile interval needs at most 2).
+    for (let guard = 0; guard < 8; guard++) {
+      let run = 0;
+      let longest = 0;
+      let longEnd = -1;
+      for (let x = a.footprint.x1 + 1; x < b.footprint.x0; x++) {
+        if (isClean(x)) {
+          run++;
+          if (run > longest) {
+            longest = run;
+            longEnd = x;
+          }
+        } else {
+          run = 0;
         }
       }
+      if (longest <= cap) break;
+      const mid = longEnd - (longest >> 1);
+      const rx = rng.range(9, 14);
+      const ry = rx * rng.range(0.5, 0.8);
+      const y0m = Math.max(yTop, world.groundY[mid] + 4);
+      // Center inside the corridor band, but deep enough that the blob's top
+      // edge cannot break the surface.
+      const cy = Math.max((y0m + yBot) / 2 + rng.range(-4, 4), world.groundY[mid] + 5 + ry);
+      stampOneBlob(world, seed + 97 + i * 13 + guard, Tile.Sand, mid + rng.range(-6, 6), cy, rx, ry);
     }
   }
 }
@@ -337,8 +423,11 @@ function stampCurtains(world: World, rng: PRNG, seed: number, layout: Layout): C
 
     for (let c = 0; c < C.perInterval; c++) {
       // Sub-range so multiple curtains per interval spread out
-      const lo = ix0 + C.pointMargin + ((ix1 - ix0 - 2 * C.pointMargin) * c) / C.perInterval;
-      const hi = ix0 + C.pointMargin + ((ix1 - ix0 - 2 * C.pointMargin) * (c + 1)) / C.perInterval;
+      const lo0 = ix0 + C.pointMargin + ((ix1 - ix0 - 2 * C.pointMargin) * c) / C.perInterval;
+      const hi0 = ix0 + C.pointMargin + ((ix1 - ix0 - 2 * C.pointMargin) * (c + 1)) / C.perInterval;
+      // East-bias within the sub-range (r10 — see gen.curtains.intervalBias)
+      const lo = lo0 + (hi0 - lo0) * C.intervalBias[0];
+      const hi = lo0 + (hi0 - lo0) * C.intervalBias[1];
       const cx = Math.round(rng.range(lo, hi));
       const wseed = seed + 211 + interval * 31 + c * 7;
 

@@ -15,7 +15,9 @@ export const CONFIG = {
   },
 
   map: {
-    width: 1920,  // tiles (worldgen v3 — see gen.points for the spacing arithmetic)
+    width: 2496,  // tiles (worldgen v3 — see gen.points for the spacing arithmetic;
+                  // r10: 1920 → 2496 so ~500-tile intervals restore the 3–4 min
+                  // first-decision window at the panel-gate-measured dig pace)
     height: 448,  // tiles (everything below the basement rock floor stays trimmed)
     tileSize: 4,  // px per tile (render only)
   },
@@ -55,15 +57,20 @@ export const CONFIG = {
     // fill the span left over after the fixed footprints:
     //   span = map.width − 2·edgeMargin − 2·homeFootprint − 2·lineFootprint
     //          − craterFootprint
-    //        = 1920 − 48 − 152 − 152 − 144 = 1424
+    //        = 2496 − 48 − 152 − 152 − 144 = 2000
     // Feasibility requires 4·spacingMin ≤ span ≤ 4·spacingMax, i.e. with the
-    // 300/400 band the map must keep span within [1200, 1600]. Additionally
+    // 450/560 band the map must keep span within [1800, 2240]. Additionally
     // |spacingJitter| must satisfy
     //   span/4 − 1.5·jitter ≥ spacingMin  and  span/4 + 1.5·jitter ≤ spacingMax
-    // (the ±1.5× comes from the zero-sum jitter renormalization).
+    // (the ±1.5× comes from the zero-sum jitter renormalization):
+    //   500 − 36 = 464 ≥ 450 ✓ and 500 + 36 = 536 ≤ 560 ✓.
     points: {
-      spacingMin: 300,      // min tiles between adjacent point footprints
-      spacingMax: 400,      // max — see the arithmetic note above before raising
+      spacingMin: 450,      // min tiles between adjacent point footprints (r10:
+                            // 300/400 → 450/560 — the panel gate measured real
+                            // dig throughput ≈1.0× proxy, so 356-tile intervals
+                            // capped the first decision at ~2.3 min against the
+                            // 2.5–5 min gate window)
+      spacingMax: 560,      // max — see the arithmetic note above before raising
       spacingJitter: 24,    // seeded ± jitter on each interval (zero-sum)
       edgeMargin: 24,       // map edge → home-trench footprint
       homeFootprint: 76,    // home trench: 28-wide trench + parapets + margin
@@ -103,6 +110,15 @@ export const CONFIG = {
     // across a curtain = depth choice.
     curtains: {
       perInterval: 1,      // curtains per interval (experimenting knob)
+      // Where inside the (margin-trimmed) interval the wall may sit, as a
+      // [lo, hi] fraction — r10 pacing retune. The 2026-07-16 panel gate
+      // measured real dig throughput at ≈1.0× the proxy (the Stage-4
+      // calibration assumed 1.5–2×), so uniformly-placed curtains produced
+      // first contact at 0:44–1:50 against a 2.5-min gate floor. East-biasing
+      // the wall delays first contact AND shortens the post-curtain dead
+      // stretch (19569978's 98 s featureless run to P1). [0, 1] = the old
+      // uniform placement.
+      intervalBias: [0.55, 0.85],
       thickness: 8,        // avg wall thickness, tiles
       edgeWarpAmp: 5,      // horizontal noise warp of the wall edges (reads as geology)
       edgeWarpFreq: 0.03,
@@ -166,8 +182,11 @@ export const CONFIG = {
 
     // Blob features. Each: count, min/max radius (tiles), y range they can
     // center in. Rock blobs are GONE in v3 — curtains own the blocking job.
-    sandPockets:  { count: 60, rMin: 8, rMax: 24, yMin: 84,  yMax: 260 },
-    waterPockets: { count: 18, rMin: 8, rMax: 18, yMin: 132, yMax: 352 },
+    // r10: counts scaled ×1.3 with the map width (density per tile constant).
+    // The featureless-span cap is guaranteed by the punctuation deficit pass
+    // in worldgen (see punctuateFeaturelessSpans), NOT by these counts.
+    sandPockets:  { count: 78, rMin: 8, rMax: 24, yMin: 84,  yMax: 260 },
+    waterPockets: { count: 24, rMin: 8, rMax: 18, yMin: 132, yMax: 352 },
     blobEdgeNoise: 0.35,   // 0 = perfect ellipses, higher = rougher blob edges
     blobPointMargin: 16,   // blob centers keep this far from point footprints
 
@@ -196,8 +215,14 @@ export const CONFIG = {
     // seconds ≈ 3–4 REAL minutes at the median — the Stage-5 human gate —
     // so 150 proxy-s as a floor would have rejected 2/3 of healthy seeds
     // while a true 60 s freebie or 600 s slog still fails loudly.
-    pacingMinS: 80,
-    pacingMaxS: 300,
+    // r10 re-derivation: intervals grew ×1.4 (356 → ~500 tiles) to restore the
+    // 3–4 min first-decision window at the panel-gate-measured throughput
+    // (real ≈ 1.0× proxy, not the 1.5–2× the Stage-4 calibration assumed), so
+    // the leg band scales with them. 110 still fails a freebie leg loudly;
+    // 420 ≈ 7 min of optimal play remains the boredom ceiling — the slow-tail
+    // panel seed exists precisely to let the human veto it.
+    pacingMinS: 110,
+    pacingMaxS: 420,
     // The playtest gate's punctuation ceiling: something map-driven must
     // interrupt a digger at least this often (PLAYTEST.md). Feeds the
     // featureless-span batch check via MAX_FEATURELESS_SPAN_TILES below.

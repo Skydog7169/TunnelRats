@@ -65,17 +65,20 @@ sense, then act. The tell narrows the search; the probe finishes it.
   or take the death respawn (the world persists; only your position resets). Log any spot
   where recovery took more than ~30 s in the results notes: that's r8 feedback.
 
-## Seeds (from the validated 50-seed batch — spread across the pacing distribution)
+## Seeds (r10 panel — from the validated 50-seed batch, spread across the pacing distribution)
 
-| # | URL | West-leg proxy estimate | Why it's in the panel |
-|---|---|---|---|
-| 1 | `?seed=610462366`  | 95 s (fast tail)   | fastest healthy seed — punctuation density check |
-| 2 | `?seed=19569978`   | 123 s (median)     | the typical crossing |
-| 3 | `?seed=2025286815` | 256 s (slow tail)  | slowest-but-passing — boredom check |
-| alt | `?seed=3746043038` | 289 s (slowest)  | substitute if any seed above feels compromised |
+| # | URL | West-leg proxy | est. T-first | Why it's in the panel |
+|---|---|---|---|---|
+| 1 | `?seed=4201562141` | 130 s (fastest) | ~2.5 min | fastest healthy seed — punctuation density check |
+| 2 | `?seed=1573859174` | 152 s (median)  | ~2.9 min | the typical crossing |
+| 3 | `?seed=1933126768` | 272 s (slow)    | ~2.8 min | slow tail — boredom check |
+| alt | `?seed=230975198` | 402 s (slowest outlier) | ~2.8 min | the extreme the new 420 s ceiling allows — a boredom veto here should tighten `validation.pacingMaxS` |
 
-Proxy seconds assume perfect play; real time runs ~1.5–2× (median seed ≈ 3–4 real minutes to the
-first curtain — which is why the batch gate sits at 80–300 proxy-s; see CHECKPOINT-STAGE4.md §1).
+⚠ CALIBRATION AMENDED (r10, 2026-07-16 panel): real dig throughput measured ≈ **1.0× proxy**
+(sustained advance ≈ 2.3 tiles/s), not the 1.5–2× Stage 4 assumed. Est. T-first above = curtain-0
+distance ÷ measured pace. The pre-r10 panel seeds (610462366 / 19569978 / 2025286815) generate
+DIFFERENT worlds since r10 (map 1920→2496, spacing 450–560, east-biased curtains, punctuation
+deficit pass) — their recorded sessions no longer replay against current worldgen.
 
 `?start=` isolates legs when a full crossing isn't needed: `?start=p1` / `?start=center` /
 `?start=p3` / `?start=east` spawn at that point (recorded in sessions, so replays reproduce).
@@ -83,11 +86,36 @@ Useful for re-measuring a middle leg after a worldgen tweak without replaying th
 
 ## Results
 
+### Panel run 1 — 2026-07-16, pre-r10 worlds (map 1920, uniform curtains)
+
+All sessions R-recorded, hash-VERIFIED, and replay-analyzed headlessly (timelines extracted from
+the sim, not from notes). Runs ended at P1; T-crater unmeasured.
+
 | seed | T-first | first decision was | punctuation gaps (s) | T-crater | verdict |
 |---|---|---|---|---|---|
-| 610462366 | | | | | |
-| 19569978 | | | | | |
-| 2025286815 | | | | | |
+| 610462366 | 1:31 | curtain 0 clink → gap crossed 2:07 | 30 · 62 · 36 · 27 (max 62, med 36) ✓ | — (P1 @ 2:34) | punctuation PASS · **T-first EARLY** |
+| 19569978 | 0:44 | curtain 0 clink → crossed 0:52 | 31 · 14 · 8 · **98** (>90 fail signal) | — (P1 @ 2:30) | **T-first EARLY · one dead stretch** |
+| 2025286815 | 1:50 | curtain 0 clink → crossed 1:56 | 57 · 53 · 6 · 25 (max 57, med 53) ✓ | — (P1 @ 2:21) | punctuation PASS · **T-first EARLY** |
+
+**Panel verdict: FAIL on criterion 1** — first decision at 0:44–1:50 against the 2.5-min floor,
+consistently ~2× early because real throughput ≈ 1.0× proxy (see calibration note above). The
+map structurally COULD NOT satisfy the window: at 2.3 tiles/s a ~356-tile interval is fully
+crossed in ~2.6 min, so no curtain placement inside it can land at 3–4 min.
+
+**r10 retune applied** (the documented levers, worldgen structure only): map.width 1920→2496 +
+spacing 450–560 (~500-tile intervals), `gen.curtains.intervalBias` [0.55, 0.85] (east-biased
+walls — also shortens the post-curtain dead stretch that produced 19569978's 98 s), pocket counts
+×1.3, punctuation deficit pass (featureless cap now generative), `validation.pacing` band
+re-derived 80–300 → 110–420. 50/50 batch green; golden re-baselined. Est. T-first on the new
+panel: 2.5–2.9 min.
+
+### Panel run 2 — r10 worlds (owed)
+
+| seed | T-first | first decision was | punctuation gaps (s) | T-crater | verdict |
+|---|---|---|---|---|---|
+| 4201562141 | | | | | |
+| 1573859174 | | | | | |
+| 1933126768 | | | | | |
 
 ## If the gate fails — tuning levers (worldgen structure ONLY)
 
