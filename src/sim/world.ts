@@ -3,6 +3,7 @@
 
 import { CONFIG } from '../config';
 import type { BandName, WorldRegions } from './regions';
+import { recomputeStabilityRect } from './stability';
 import { Tile, TILE_SOLID, TILE_STABILITY } from './tiles';
 
 export interface TrenchZone {
@@ -17,7 +18,9 @@ export class World {
   readonly h = CONFIG.map.height;
 
   readonly tiles = new Uint8Array(this.w * this.h);
-  readonly stability = new Float32Array(this.w * this.h); // inert until Phase 2
+  // LIVE state since Phase 2 Stage A (see stability.ts) — hashed in hash.ts.
+  // Solid tiles hold the material mirror; open tiles hold the roof score.
+  readonly stability = new Float32Array(this.w * this.h);
   readonly lightSun = new Float32Array(this.w * this.h);
   readonly lightDyn = new Float32Array(this.w * this.h);
 
@@ -36,6 +39,12 @@ export class World {
   // Columns whose sunlight needs recomputing (from tile edits).
   private dirtySunMin = Number.POSITIVE_INFINITY;
   private dirtySunMax = Number.NEGATIVE_INFINITY;
+
+  // Rect of tile edits whose stability window needs recomputing.
+  private dirtyStabX0 = Number.POSITIVE_INFINITY;
+  private dirtyStabY0 = Number.POSITIVE_INFINITY;
+  private dirtyStabX1 = Number.NEGATIVE_INFINITY;
+  private dirtyStabY1 = Number.NEGATIVE_INFINITY;
 
   idx(x: number, y: number): number {
     return y * this.w + x;
@@ -60,13 +69,55 @@ export class World {
     const i = y * this.w + x;
     if (this.tiles[i] === t) return;
     this.tiles[i] = t;
-    this.stability[i] = TILE_STABILITY[t];
+    this.stability[i] = TILE_STABILITY[t]; // provisional; updateStability rescoring follows
     this.markSunDirty(x);
+    this.markStabilityDirty(x, y);
   }
 
   markSunDirty(x: number): void {
     if (x < this.dirtySunMin) this.dirtySunMin = x;
     if (x > this.dirtySunMax) this.dirtySunMax = x;
+  }
+
+  markStabilityDirty(x: number, y: number): void {
+    if (x < this.dirtyStabX0) this.dirtyStabX0 = x;
+    if (x > this.dirtyStabX1) this.dirtyStabX1 = x;
+    if (y < this.dirtyStabY0) this.dirtyStabY0 = y;
+    if (y > this.dirtyStabY1) this.dirtyStabY1 = y;
+  }
+
+  /**
+   * Process pending stability dirt. Called once per tick; no-op when clean.
+   * The expansion is exactly the score's dependency window: a changed tile
+   * can affect support scans supportScanMax away on its own row, and roofs /
+   * ceiling-contact status up to overburdenRows BELOW it. Nothing above a
+   * change can see it (scores look up and sideways only), so the rect never
+   * grows upward — this is what makes incremental == full, and the golden
+   * run asserts that equivalence.
+   */
+  updateStability(): void {
+    if (this.dirtyStabX0 === Number.POSITIVE_INFINITY) return;
+    const S = CONFIG.stability;
+    recomputeStabilityRect(
+      this,
+      this.dirtyStabX0 - S.supportScanMax,
+      this.dirtyStabY0,
+      this.dirtyStabX1 + S.supportScanMax,
+      this.dirtyStabY1 + S.overburdenRows,
+    );
+    this.dirtyStabX0 = Number.POSITIVE_INFINITY;
+    this.dirtyStabY0 = Number.POSITIVE_INFINITY;
+    this.dirtyStabX1 = Number.NEGATIVE_INFINITY;
+    this.dirtyStabY1 = Number.NEGATIVE_INFINITY;
+  }
+
+  /** Full initial stability computation (worldgen; also the equivalence oracle). */
+  computeStabilityFull(): void {
+    recomputeStabilityRect(this, 0, 0, this.w - 1, this.h - 1);
+    this.dirtyStabX0 = Number.POSITIVE_INFINITY;
+    this.dirtyStabY0 = Number.POSITIVE_INFINITY;
+    this.dirtyStabX1 = Number.NEGATIVE_INFINITY;
+    this.dirtyStabY1 = Number.NEGATIVE_INFINITY;
   }
 
   /**

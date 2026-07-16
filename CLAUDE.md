@@ -1,7 +1,14 @@
 # Tunnel Rats — Claude Code project notes
 
 The full game design lives in [DESIGN.md](DESIGN.md). Read it before touching anything.
-We build **phase by phase** and stop for playtest feedback after each phase. Current status: **Phase 1 complete (7 playtest revisions); Phase 1.5 code complete — Stages 1–5 built (determinism harness, transcendental sweep, Loadout data stub, worldgen v3, crossing-playtest support). The phase exits through the HUMAN playtest gate in [PLAYTEST.md](PLAYTEST.md) — do not start Phase 2 until it passes.** Stage 4 checkpoint report: [CHECKPOINT-STAGE4.md](CHECKPOINT-STAGE4.md).
+We build **phase by phase** and stop for playtest feedback after each phase. Current status: **Phase 1 + Phase 1.5 complete (the formal PLAYTEST.md panel gate — seeds 610462366 / 19569978 / 2025286815, R-recorded — is still OWED by Hayden and should run during Stage A while pacing is still attributable to worldgen). Phase 2 Stage A code complete (stability field + live heatmap) — exits through Hayden's heatmap playtest; no collapses yet (Stage B).** Checkpoint reports: [CHECKPOINT-STAGE4.md](CHECKPOINT-STAGE4.md), [CHECKPOINT-PHASE2A.md](CHECKPOINT-PHASE2A.md).
+
+## Stability field (Phase 2 Stage A)
+
+- `src/sim/stability.ts`: every OPEN tile (air/ladder/flag pole) with a solid roof directly overhead scores 0..100 = roof-material mix (`overburdenRows` straight up, air rows count 0 — thin shells are precarious for free; timber overhead = shoring) × support factor (distance to nearest solid at the same row, capped `supportScanMax`) × mild depth pressure (below `groundY` — carving never relieves pressure). Open tiles with air overhead = flat 100 (sky/trench, invisible on the heatmap); solids keep the material mirror. All tunables in `CONFIG.stability`; `warnThreshold`/`collapseThreshold` are DATA ONLY until Stage B.
+- **Incremental contract (protect this):** a score reads only a bounded window (sideways + up, never below), so `World` recomputes a per-tick dirty rect expanded by exactly that window. **The golden run asserts incremental == full bit-for-bit (`stabIncrOk`) — widen the dirty expansion if you ever widen the dependency window.**
+- The stability Float32Array is **hashed** (`StateHasher.f32Array`, exact f32 bits, little-endian) — golden re-baselined for this (`…9e36 → …4f0d`); session JSONs recorded before Stage A no longer verify their `finalHash`.
+- Debug view 2 (`B`) is the LIVE heatmap (red < collapse, red→yellow warn band, yellow→green safe); the overlay shows `roof stability:` for the ceiling over the player. Stage-B-relevant findings (enemy drives in the warn band, pre-dug galleries under sand pockets at collapse level, bare sap tails near warn) are in the checkpoint report.
 
 ## Crossing playtest support (Phase 1.5 Stage 5)
 

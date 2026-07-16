@@ -35,6 +35,7 @@ export class Sim {
   step(cmd: InputCommand): void {
     this.player.tick(cmd);
     this.world.updateSunlight();
+    this.world.updateStability();
     this.updateLights();
     this.tickCount++;
   }

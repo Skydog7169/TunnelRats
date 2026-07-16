@@ -24,18 +24,21 @@
 //     (flag ownership, half-mast capture progress — Phase 4) MUST be
 //     registered here the moment it is introduced. Regions only cover the
 //     generation output.
+//   - world.stability (Phase 2 Stage A): the full Float32Array, hashed as
+//     exact IEEE-754 f32 bit patterns. Today it is recomputable from tiles,
+//     but it is maintained INCREMENTALLY (dirty rects) — hashing it makes the
+//     golden test prove incremental == full on every run, and Stage B+
+//     (collapse damage, chipped walls) makes it genuinely path-dependent.
 //
 // DELIBERATELY EXCLUDED (derived or renderer-owned):
 //   - lightSun / lightDyn: recomputed from tiles + player state every tick
-//   - stability array: currently a pure mirror of tiles. ⚠ Phase 2 makes it
-//     live state — REGISTER IT HERE when that lands.
 //   - player.digPreview / lastImpactTiles / lastClinks: transient per-tick
 //     outputs, fully derived
 //   - camera, particles, walk cycle, debug state: renderer-owned
 //
-// Phase 2+ registration checklist: stability array, corpses, placed timbers /
-// items, noise events in flight, AI soldier state, capture-point ownership +
-// capture progress (see the regions note above).
+// Phase 2+ registration checklist: corpses, placed timbers / items, noise
+// events in flight, AI soldier state, capture-point ownership + capture
+// progress (see the regions note above).
 
 // Type-only: keeps hash.ts import-cycle-free at runtime (loadout → hash).
 import type { Sim } from './sim';
@@ -76,6 +79,18 @@ export class StateHasher {
     }
   }
 
+  /** Hash exact IEEE-754 f32 bit patterns, explicit little-endian. */
+  f32Array(a: Float32Array): void {
+    this.u32(a.length);
+    for (let i = 0; i < a.length; i++) {
+      this.view.setFloat32(0, a[i], true);
+      this.byte(this.view.getUint8(0));
+      this.byte(this.view.getUint8(1));
+      this.byte(this.view.getUint8(2));
+      this.byte(this.view.getUint8(3));
+    }
+  }
+
   digest(): string {
     return (
       this.h1.toString(16).padStart(8, '0') + this.h2.toString(16).padStart(8, '0')
@@ -92,5 +107,6 @@ export function hashSimState(sim: Sim): string {
   h.u32(sim.rng.state);
   sim.player.hashState(h);
   hashWorldRegions(h, sim.world.regions); // appended in Stage 4 (see header)
+  h.f32Array(sim.world.stability); // appended in Phase 2 Stage A (see header)
   return h.digest();
 }

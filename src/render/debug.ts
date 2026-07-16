@@ -15,7 +15,7 @@ export interface DebugState {
 }
 
 export const VIEW_COUNT = 4;
-const VIEW_NAMES = ['off', 'strata (fullbright)', 'stability heatmap', 'regions (worldgen v3)'];
+const VIEW_NAMES = ['off', 'strata (fullbright)', 'stability heatmap (LIVE)', 'regions (worldgen v3)'];
 
 export function drawDebugOverlay(
   ctx: CanvasRenderingContext2D,
@@ -25,12 +25,28 @@ export function drawDebugOverlay(
 ): void {
   const p = sim.player;
   const tileUnder = sim.world.getTile(playerTile.x, playerTile.y + 1) as Tile;
+  // Roof score over the player: scan up the player's column to the last open
+  // tile under the ceiling — that's the tile whose live stability score says
+  // whether this roof holds (renderer-side readout only, never sim input).
+  const world = sim.world;
+  let roofStr = 'open sky';
+  {
+    let yc = Math.floor(p.y - p.height * 0.5);
+    while (yc > 0 && !world.isSolid(playerTile.x, yc - 1)) yc--;
+    if (world.isSolid(playerTile.x, yc - 1)) {
+      const s = world.stability[world.idx(playerTile.x, yc)];
+      const S = CONFIG.stability;
+      const zone = s <= S.collapseThreshold ? 'COLLAPSE' : s <= S.warnThreshold ? 'WARN' : 'ok';
+      roofStr = `${s.toFixed(1)} ${zone} (warn<${S.warnThreshold} collapse<${S.collapseThreshold})`;
+    }
+  }
   const lines = [
     `fps ${dbg.fps.toFixed(0)}  tick ${sim.tickCount} @ ${CONFIG.sim.tickRate}Hz`,
     `seed ${sim.seed}   (?seed=${sim.seed}${sim.startPoint !== 0 ? `&start=${sim.startPoint}` : ''}, N = new seed)`,
     `player tile ${playerTile.x},${playerTile.y}  vel ${p.vx.toFixed(1)},${p.vy.toFixed(1)}`,
     `standing on: ${TILE_NAME[tileUnder]}  band: ${sim.world.bandAt(playerTile.x, playerTile.y)}  crouch:${p.crouching ? 'y' : 'n'} grounded:${p.grounded ? 'y' : 'n'}`,
     `loadout: ${p.loadout.slots.map((s) => (s ? `${s.item}×${s.count}` : '—')).join(' | ')}`,
+    `roof stability: ${roofStr}`,
     `debug view [B]: ${VIEW_NAMES[dbg.viewMode]}`,
     `light@player sun ${sim.world.lightSun[sim.world.idx(playerTile.x, playerTile.y)]?.toFixed(2)} dyn ${sim.world.lightDyn[sim.world.idx(playerTile.x, playerTile.y)]?.toFixed(2)}`,
     `[R] record  [H] hash  (drop a session .json to replay)`,

@@ -74,6 +74,7 @@ try {
   console.log(`hash:          ${res.hash}`);
   console.log(`repeatOk:      ${res.repeatOk}`);
   console.log(`sensitivityOk: ${res.sensitivityOk}`);
+  console.log(`stabIncrOk:    ${res.stabilityIncrementalOk}`);
   console.log(`coverage:      ${JSON.stringify(res.coverage)}`);
 
   const cov = res.coverage;
@@ -86,6 +87,9 @@ try {
     exitCode = 1;
   } else if (!res.sensitivityOk) {
     console.error('FAIL: tile flip did not change the hash — hash is blind to the world!');
+    exitCode = 1;
+  } else if (!res.stabilityIncrementalOk) {
+    console.error('FAIL: incremental stability diverged from a full recompute — dirty window too small?');
     exitCode = 1;
   } else if (!covOk) {
     console.error('FAIL: script coverage incomplete — golden run is not exercising enough systems.');

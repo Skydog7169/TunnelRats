@@ -26,7 +26,7 @@ import {
   WorkingRegion,
   WorldRegions,
 } from './regions';
-import { isDiggable, Tile, TILE_SOLID, TILE_STABILITY } from './tiles';
+import { isDiggable, Tile, TILE_SOLID } from './tiles';
 import { World } from './world';
 
 export interface GenResult {
@@ -110,10 +110,9 @@ export function generateWorld(world: World, seed: number): GenResult {
   // --- Abandoned workings (after everything with air, so isolation scans see it)
   const workings = carveWorkings(world, rngWorkings, layout, curtains);
 
-  // --- Stability mirror + light ---------------------------------------------
-  for (let i = 0; i < world.tiles.length; i++) {
-    world.stability[i] = TILE_STABILITY[world.tiles[i]];
-  }
+  // --- Stability field + light (Stage A: live roof scores, not just the
+  // material mirror — see stability.ts) ---------------------------------------
+  world.computeStabilityFull();
   world.computeSunlightFull();
 
   // --- Final gap flags (after ALL carving: the network may tunnel through a

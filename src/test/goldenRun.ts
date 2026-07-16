@@ -23,6 +23,10 @@ export interface GoldenResult {
   runMs: number;
   repeatOk: boolean; // two independent runs produced the same hash
   sensitivityOk: boolean; // flipping one tile changes the hash
+  // Phase 2 Stage A contract: the incrementally-maintained (dirty-rect)
+  // stability field must be bit-identical to a from-scratch full recompute
+  // after all the script's digging.
+  stabilityIncrementalOk: boolean;
   coverage: {
     walked: boolean;
     jumped: boolean; // was airborne off-ladder at least once
@@ -153,12 +157,24 @@ export function runGolden(): GoldenResult {
   a.sim.world.tiles[123456] ^= 1;
   const tampered = hashSimState(a.sim);
 
+  // Stability equivalence: replay-maintained dirty rects vs a full pass.
+  const incremental = b.sim.world.stability.slice();
+  b.sim.world.computeStabilityFull();
+  let stabilityIncrementalOk = true;
+  for (let i = 0; i < incremental.length; i++) {
+    if (incremental[i] !== b.sim.world.stability[i]) {
+      stabilityIncrementalOk = false;
+      break;
+    }
+  }
+
   return {
     hash: hashA,
     ticks: buildScript().length,
     runMs: Date.now() - t0,
     repeatOk: hashA === hashB,
     sensitivityOk: tampered !== hashA,
+    stabilityIncrementalOk,
     coverage: b.coverage,
   };
 }

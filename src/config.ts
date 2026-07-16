@@ -227,6 +227,39 @@ export const CONFIG = {
   },
 
   // --------------------------------------------------------------------------
+  // Stability field (Phase 2 Stage A). Every OPEN tile (air/ladder/flag pole)
+  // with a solid roof directly overhead gets a live score 0..100:
+  //   score = roofMaterial × supportFactor × depthFactor
+  // Open tiles with air overhead score a flat 100 (nothing to fall); solid
+  // tiles keep the inert per-material mirror. Scores are a PURE function of
+  // tiles inside a bounded window (supportScanMax wide, overburdenRows tall),
+  // which is what makes incremental dirty-rect recompute bit-identical to a
+  // full pass — the golden run asserts that equivalence every time it runs.
+  // Warn/collapse thresholds are DATA ONLY this stage (heatmap color bands);
+  // tells and collapse propagation consume them in Stage B.
+  // --------------------------------------------------------------------------
+  stability: {
+    overburdenRows: 4,     // roof rows sampled straight up (air rows count 0 —
+                           // a thin shell over another void is precarious)
+    overburdenDecay: 0.5,  // weight decay per row up (1, .5, .25, .125)
+    supportScanMax: 32,    // support-search cap, tiles — ALSO the horizontal
+                           // dirty-window radius; raising it widens every
+                           // incremental recompute
+    supportSafeDist: 4,    // ≤ this far from a wall/timber = no span penalty
+                           // (covers shafts and fresh faces)
+    spanFloor: 0.6,        // support factor at/beyond supportScanMax — mid-span
+                           // of a long gallery keeps this fraction; material
+                           // dominates (long clay tunnel ≈ 43, topsoil ≈ 15)
+    depthPenaltyPerTile: 0.0005, // overburden pressure per tile below the
+                           // NATURAL ground line (groundY — carving never
+                           // relieves pressure). Mild by design: the clay
+                           // band's depth advantage lives in the material.
+    depthFloor: 0.85,      // depth factor never drops below this
+    warnThreshold: 30,     // Stage B: warning tells below this (heatmap orange)
+    collapseThreshold: 15, // Stage B: collapse below this (heatmap red)
+  },
+
+  // --------------------------------------------------------------------------
   // Player movement & digging
   // --------------------------------------------------------------------------
   player: {

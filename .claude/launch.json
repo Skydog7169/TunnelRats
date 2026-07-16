@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "--port", "5233", "--strictPort"],
       "port": 5233
+    },
+    {
+      "name": "dev-b",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5245", "--strictPort"],
+      "port": 5245
     }
   ]
 }

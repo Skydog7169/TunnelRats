@@ -6,7 +6,7 @@
 import { CONFIG } from '../config';
 import { ITEMS } from '../sim/items';
 import { Sim } from '../sim/sim';
-import { Tile, TILE_DIG_TICKS } from '../sim/tiles';
+import { Tile, TILE_DIG_TICKS, TILE_SOLID } from '../sim/tiles';
 import { hash2 } from '../core/prng';
 import { Camera } from './camera';
 import { SKY_COLOR, TILE_COLOR } from './palette';
@@ -825,6 +825,14 @@ export class Renderer {
 
   // --- Overlays / HUD ----------------------------------------------------------
 
+  /**
+   * Debug view 2 — LIVE stability heatmap (Phase 2 Stage A). Open tiles with
+   * a roof draw the live score, color-banded on the Stage-B thresholds:
+   * red = collapse zone, orange→yellow = warning zone, yellow→green = safe,
+   * fading out as the roof gets solid. Open tiles with nothing overhead
+   * (score 100 — sky, open trench) draw nothing. Solid tiles keep a faint
+   * material-stability backdrop for context.
+   */
   private drawStabilityOverlay(
     x0: number,
     x1: number,
@@ -836,14 +844,30 @@ export class Renderer {
   ): void {
     const { ctx } = this;
     const world = this.sim.world;
+    const warn = CONFIG.stability.warnThreshold;
+    const col = CONFIG.stability.collapseThreshold;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const i = y * world.w + x;
-        if (world.tiles[i] === Tile.Air || world.tiles[i] === Tile.Ladder) continue;
-        const s = world.stability[i] / 100; // 0 bad → 1 solid
-        const r = Math.floor(255 * (1 - s));
-        const g = Math.floor(220 * s);
-        ctx.fillStyle = `rgba(${r},${g},40,0.45)`;
+        const s = world.stability[i];
+        if (TILE_SOLID[world.tiles[i]] === 1) {
+          const n = s / 100;
+          ctx.fillStyle = `rgba(${Math.floor(255 * (1 - n))},${Math.floor(220 * n)},40,0.15)`;
+          ctx.fillRect(wsx(x), wsy(y), ts + 0.5, ts + 0.5);
+          continue;
+        }
+        if (s >= 99.5) continue; // nothing overhead — not at risk
+        let r: number, g: number, a: number;
+        if (s <= col) {
+          r = 255; g = 24; a = 0.85; // collapse zone: hard red
+        } else if (s <= warn) {
+          const t = (s - col) / (warn - col); // warning zone: red → yellow
+          r = 255; g = Math.floor(24 + 196 * t); a = 0.75 - 0.2 * t;
+        } else {
+          const t = Math.min(1, (s - warn) / (100 - warn)); // safe: yellow → green
+          r = Math.floor(230 * (1 - t)); g = 220; a = 0.55 - 0.4 * t;
+        }
+        ctx.fillStyle = `rgba(${r},${g},30,${a})`;
         ctx.fillRect(wsx(x), wsy(y), ts + 0.5, ts + 0.5);
       }
     }
